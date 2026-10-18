@@ -24,10 +24,21 @@ This release does not add automated third-party AI platform monitoring, direct S
 - Fixed dashboard action buttons to navigate directly to the selected workspace page by synchronizing the sidebar navigation state on rerun.
 - Automated tests still cover helper functions; Streamlit browser rendering could not be run in this environment because package-index DNS/network access is unavailable.
 
-## V3.4 — Distinctive visual system and light-field correction
-- Replaced the generic violet/blue gradient identity with an original forest-green, citron, coral and warm-paper palette across the app and HTML preview.
-- Reworked authentication into an asymmetric two-panel experience with a branded growth-signal visual and separate workspace form.
-- Added explicit light backgrounds and readable text/placeholder colors for password, email and text fields, including BaseWeb wrapper elements that can otherwise retain a dark theme.
-- Restyled tabs and primary/secondary actions for clear contrast and visible active states.
-- Kept real data and demo-preview labeling distinct; no live metrics are fabricated by the login page.
-- Automated tests and Python compilation pass. Streamlit browser rendering remains unverified because Streamlit is unavailable in this build environment.
+## 3.2 — Public landing/auth experience
+- Reworked the unauthenticated screen into a responsive two-column SaaS landing/auth layout with an original violet/mint visual identity and product UI illustration.
+- Added explicit, high-contrast sign-in/create-account tab states and clearer input placeholders.
+- Updated the standalone HTML preview to mirror the same landing-page layout and visual language. The HTML form is a visual preview only; real authentication is in Streamlit.
+- No fabricated performance numbers are shown in the preview illustration; the health score is intentionally blank until a real crawl is performed.
+
+## v3.3 — Authentication contrast fix
+- Explicitly force authentication input wrappers, password/email fields, placeholders, and password-visibility controls to use white surfaces and dark readable text.
+- Restore clear, accessible inactive/active tab colors and consistent form submit button styling.
+- Hardened standalone preview form inputs against inherited dark styles so preview and app share the same light-field design.
+- Python syntax check and all 9 automated tests passed. Browser rendering of Streamlit remains unverified in this build environment.
+
+## V3.5 — Authentication field contrast fix
+
+- Added final, high-specificity light-theme overrides for Streamlit BaseWeb input shells and nested wrappers.
+- Added explicit autofill styling so browsers do not turn entered email/password fields dark.
+- Changed focused input treatment to a soft green focus ring and styled password visibility controls to remain light.
+- Browser verification is still required because Streamlit is not installed in the restricted build environment.
