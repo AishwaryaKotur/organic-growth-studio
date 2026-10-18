@@ -1,44 +1,83 @@
-# Organic Growth Studio V2.0 — Organic Growth Workspace
+# Organic Growth Studio V3.0
 
-A Streamlit application for authorized website audits and an SEO + AEO workflow. V2.0 consolidates the existing audit, optional AI recommendations, Search Console CSV analysis and manual AI visibility tracking, and adds an editable action center.
-
-## What's included
-
-- **Technical SEO audit:** crawls a capped number of same-origin HTML pages; checks robots.txt, uses a configurable delay, and reports HTTP status, title, meta description, H1, canonical, noindex, image alt attributes, rough text volume, JSON-LD presence and internal/external links.
-- **Safer URL fetching:** normalizes common tracking parameters, preserves other query parameters, blocks private/local targets, and validates redirect destinations before requesting them.
-- **Evidence-based findings:** includes evidence, recommended action, why it may matter, effort and confidence; severity remains a triage heuristic and requires human review.
-- **Action Center:** editable status field for each finding, exportable as CSV. Task status is session-only; export the CSV to preserve it. No persistent database is included.
-- **Optional AI recommendations:** uses OpenAI API to draft context-aware explanations and proposed fixes from selected audit evidence and business context. Configure `OPENAI_API_KEY`; AI remains optional.
-- **Search performance:** import a standard Google Search Console Performance CSV and inspect clicks, impressions, CTR, average position and query opportunities where columns are available. This is CSV import, not a direct Google OAuth/API connection.
-- **AI visibility tracking:** download a template, manually run fixed buyer prompts on selected AI platforms, record mentions/citations/competitors, then upload results for mention-rate summaries. This does not automatically query AI platforms.
-- **Exports:** Excel audit workbook, AI recommendation CSV, action plan CSV, normalized Search Console CSV, and AI visibility template/results CSV.
+A Streamlit-based organic growth workspace with technical SEO auditing, optional OpenAI recommendations, Search Console CSV imports, manually recorded AI visibility observations, competitor homepage comparisons, action tracking, and project/audit history.
 
 ## Run locally
 
-Requires Python 3.10+ and internet access.
+Python 3.10+ recommended.
 
-1. Extract the ZIP and open a terminal in this folder.
-2. Install dependencies: `pip install -r requirements.txt`
-3. Start the app: `streamlit run app.py`
-4. Open the local URL shown in the terminal.
-
-## Optional AI setup
-
-Set `OPENAI_API_KEY` in your environment or Streamlit Community Cloud → App settings → Secrets:
-
-```toml
-OPENAI_API_KEY = "your-api-key-here"
+```bash
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Never commit a real key to GitHub or include it in screenshots. OpenAI API usage is billed separately from ChatGPT subscriptions. The AI feature sends the website URL, user-provided business context, selected page metadata and up to 25 findings to the configured API. Do not send confidential or personal data. Review every suggestion before implementation.
+Open the local URL shown by Streamlit. Create an account from the sign-up screen.
 
-## Deploying to Streamlit Community Cloud
+## Enable AI analysis
 
-Upload the files in this folder to the root of your GitHub repository and set the main file path to `app.py`. Keep the repository private while testing. The app currently has no user authentication, tenant isolation, persistent database, billing or per-client access controls; do not expose it as a public multi-client service until these are implemented.
+Set a secret/environment variable:
 
-## Limitations and responsible use
+```toml
+OPENAI_API_KEY = "your-api-key"
+OPENAI_MODEL = "gpt-4.1-mini"
+```
 
-- No JavaScript rendering, direct Search Console API/OAuth, GA4 integration, backlink index, field Core Web Vitals, persistent projects/task history, or automatic AI-platform querying/citation verification.
-- The diagnostic score is a heuristic triage aid, not a Google metric, ranking forecast or guarantee.
-- Search Console data must be exported by an authorized property user. AI visibility is manually observed and varies by prompt, date, location, account and model version.
-- Audit only public sites you own or are authorized to assess. Respect robots.txt, site terms and reasonable crawl rates. Do not promise rankings, AI citations, traffic or revenue.
+For Streamlit Community Cloud, put these in App → Settings → Secrets. Never commit API keys. API usage is billed separately from a ChatGPT subscription.
+
+## Deploy to Streamlit Community Cloud
+
+1. Upload `app.py`, `requirements.txt`, and `README.md` to the root of a GitHub repository.
+2. In Streamlit Community Cloud, create/redeploy the app using `app.py` as the main file.
+3. Configure the OpenAI secret only if you want AI recommendations.
+4. Create an account and a project.
+
+## Features included
+
+- Account registration/sign-in with PBKDF2 password hashing (prototype-grade auth)
+- Multiple projects per account, local SQLite persistence
+- Limited same-origin HTML crawler, robots.txt check, request delay and public-host checks
+- SEO checks: HTTP status, title, description, H1, canonical, noindex, image alt, text volume, JSON-LD presence, internal links
+- Findings with priority, evidence and recommended action
+- Optional OpenAI grounded audit recommendations
+- Search Console CSV import and query summaries
+- Manual AI visibility observation tracking with mention/citation rates
+- Competitor homepage on-page signal comparison
+- Action center, task status tracking, audit and AI report history
+- CSV exports
+
+## Important limitations — read before commercial use
+
+This is a V3 product prototype, not a fully production-hardened SaaS service.
+
+- AI visibility tracking is manual; there is no automatic querying of ChatGPT, Gemini, Perplexity or Google AI Overviews.
+- Search Console integration imports CSV exports; OAuth/API connection is not implemented.
+- Competitor analysis is limited to public homepage HTML; there is no keyword database, backlink index, search-volume provider or rank tracker.
+- Subscription table/UI is informational only. Stripe payments, webhooks, entitlements and invoices are not implemented.
+- Scheduled scans and notifications are not run automatically. Use an external scheduler/worker and email provider before promising recurring reports.
+- SQLite is appropriate for a single-user/small prototype. Streamlit Community Cloud local storage may be ephemeral; use managed PostgreSQL and persistent storage for real client data.
+- Authentication lacks email verification, password reset, MFA, session hardening and formal security review. Do not use this prototype to store sensitive data or present it as enterprise-secure.
+- The crawler has conservative protections but has not undergone a security audit. Audit only sites you own or have explicit permission to assess.
+- SEO findings and scores are heuristic. They do not predict rankings, traffic, AI citations or leads.
+- The app does not render JavaScript, measure field Core Web Vitals, access backlinks, or automatically modify websites.
+- Respect site terms, robots directives, privacy requirements, API terms and data-provider licenses.
+
+## Recommended production hardening
+
+1. Move authentication to a mature identity provider or add verification/reset/MFA.
+2. Move data to managed PostgreSQL and add tenant-level authorization tests.
+3. Add a background worker and scheduler for crawling and notifications.
+4. Implement Google OAuth/Search Console API with explicit consent.
+5. Add approved AI-search data sources or clearly documented manual observation workflows.
+6. Integrate Stripe checkout and webhook-verified subscription entitlements.
+7. Add monitoring, backups, rate limits, security review, privacy policy and terms of service.
+
+## Project layout
+
+- `app.py` — Streamlit application
+- `requirements.txt` — dependencies
+- `README.md` — setup, deployment and limitations
