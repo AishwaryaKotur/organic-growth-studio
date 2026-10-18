@@ -23,3 +23,9 @@ This release does not add automated third-party AI platform monitoring, direct S
 - Updated sign-in and empty-project screens to use the same branded visual language as the dashboard.
 - Fixed dashboard action buttons to navigate directly to the selected workspace page by synchronizing the sidebar navigation state on rerun.
 - Automated tests still cover helper functions; Streamlit browser rendering could not be run in this environment because package-index DNS/network access is unavailable.
+
+## 3.2 — Public landing/auth experience
+- Reworked the unauthenticated screen into a responsive two-column SaaS landing/auth layout with an original violet/mint visual identity and product UI illustration.
+- Added explicit, high-contrast sign-in/create-account tab states and clearer input placeholders.
+- Updated the standalone HTML preview to mirror the same landing-page layout and visual language. The HTML form is a visual preview only; real authentication is in Streamlit.
+- No fabricated performance numbers are shown in the preview illustration; the health score is intentionally blank until a real crawl is performed.

@@ -62,7 +62,44 @@ st.markdown("""
 .ogs-notice{background:#eff6ff;border:1px solid #dbeafe;color:#1e40af;padding:12px 14px;border-radius:10px;font-size:12px;line-height:1.5;margin:12px 0}
 .ogs-chip{display:inline-block;border-radius:999px;padding:4px 8px;background:#e9f8f1;color:#08764d;font-size:10px;font-weight:750}
 h1,h2,h3{color:#172033}
-@media(max-width:800px){.block-container{padding-left:1rem;padding-right:1rem}.ogs-heading{font-size:25px}}
+
+/* Public landing and authentication */
+[data-testid="stMainBlockContainer"]{max-width:1420px}
+.ogs-public-wrap{padding:12px 0 34px}
+.ogs-public-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 4px 22px;margin-bottom:16px;border-bottom:1px solid #e7eaf3}
+.ogs-brand{display:flex;align-items:center;gap:10px;font-weight:850;letter-spacing:-.55px;color:#151b2e;font-size:17px}
+.ogs-brand-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:12px;background:linear-gradient(140deg,#6d5dfc,#8e7cff);color:#fff;font-size:18px;box-shadow:0 5px 14px #6d5dfc30}
+.ogs-nav-note{font-size:12px;color:#667085}
+.ogs-public-hero{position:relative;overflow:hidden;border:1px solid #e0e5f5;border-radius:28px;background:radial-gradient(circle at 85% 10%,#dffaf2 0,transparent 29%),radial-gradient(circle at 10% 0%,#e7eaff 0,transparent 37%),linear-gradient(135deg,#fbfcff 0%,#fff 58%,#f7fffc 100%);padding:38px 36px 34px;box-shadow:0 18px 55px rgba(35,45,90,.06)}
+.ogs-public-hero h1{font-size:clamp(34px,3.6vw,54px);line-height:1.04;letter-spacing:-2.2px;font-weight:850;color:#171d31;margin:12px 0 18px;max-width:610px}
+.ogs-public-hero p{font-size:15px;line-height:1.75;color:#59657d;max-width:570px}
+.ogs-pill{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #e4e7f3;color:#5146d8;border-radius:999px;padding:7px 11px;font-size:10px;font-weight:850;letter-spacing:1.15px;text-transform:uppercase}
+.ogs-feature-row{display:flex;flex-wrap:wrap;gap:9px;margin:22px 0 24px}
+.ogs-feature{background:#fff;border:1px solid #e5e8f2;border-radius:999px;padding:8px 11px;font-size:11px;font-weight:700;color:#4b556b}
+.ogs-preview-shell{border:1px solid #dce2f0;border-radius:20px;background:#fff;padding:13px;box-shadow:0 18px 40px rgba(28,37,72,.12);transform:rotate(.4deg)}
+.ogs-preview-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #edf0f6;padding:5px 4px 12px;font-size:10px;font-weight:800;color:#26304a}
+.ogs-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c58b;margin-right:6px}
+.ogs-preview-body{display:grid;grid-template-columns:1.1fr .9fr;gap:10px;padding:13px 3px 3px}
+.ogs-mini-label{font-size:9px;color:#8790a3;margin-bottom:7px}
+.ogs-mini-score{font-size:30px;letter-spacing:-1.4px;font-weight:850;color:#18213a}
+.ogs-mini-bar{height:6px;background:#edf0f8;border-radius:8px;overflow:hidden;margin:8px 0 11px}.ogs-mini-bar span{display:block;width:84%;height:100%;background:linear-gradient(90deg,#6d5dfc,#4bd6b0);border-radius:8px}
+.ogs-mini-item{display:flex;gap:7px;align-items:center;padding:8px 7px;border:1px solid #edf0f6;border-radius:9px;margin-top:6px;font-size:9px;color:#34405a}
+.ogs-mini-icon{display:inline-flex;width:21px;height:21px;align-items:center;justify-content:center;border-radius:7px;background:#f0edff;color:#6557ee;font-size:11px}
+.ogs-mini-stat{background:#f8f9fd;border:1px solid #edf0f6;border-radius:10px;padding:10px;margin-top:7px}.ogs-mini-stat b{display:block;font-size:17px;color:#18213a}.ogs-mini-stat span{font-size:9px;color:#7a8498}
+.ogs-public-heading{font-size:22px;letter-spacing:-.7px;font-weight:850;color:#171d31;margin:24px 0 4px}
+.ogs-public-sub{font-size:12px;line-height:1.6;color:#69758c;margin-bottom:17px}
+.ogs-auth-card{background:#fff;border:1px solid #e4e8f2;border-radius:22px;padding:22px 22px 18px;box-shadow:0 12px 35px rgba(35,45,90,.055);margin-top:0}
+.ogs-auth-card h3{font-size:20px;margin:0 0 5px;letter-spacing:-.6px;color:#172033}
+.ogs-auth-card p{font-size:12px;color:#6c7890;margin:0 0 15px;line-height:1.6}
+[data-testid="stTabs"] [data-baseweb="tab-list"]{gap:8px;border-bottom:1px solid #eceef5}
+[data-testid="stTabs"] button[role="tab"]{border-radius:10px 10px 0 0;padding:10px 14px;color:#657087!important;font-weight:750!important}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"]{color:#5548e8!important;border-bottom:3px solid #6d5dfc!important;background:#f7f6ff!important}
+.ogs-trustline{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:18px;font-size:10px;color:#7c879b}
+.ogs-trustline span:before{content:'✓';color:#14a879;font-weight:900;margin-right:5px}
+.ogs-footer-note{text-align:center;font-size:10px;color:#8790a3;margin-top:22px}
+@media(max-width:900px){.ogs-public-hero{padding:27px 22px}.ogs-public-hero h1{font-size:36px}.ogs-preview-shell{margin-top:16px}.ogs-public-nav{padding-bottom:14px}}
+@media(max-width:800px){.block-container{padding-left:1rem;padding-right:1rem}.ogs-heading{font-size:25px}.ogs-public-hero h1{font-size:33px;letter-spacing:-1.2px}.ogs-preview-body{grid-template-columns:1fr 1fr}}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -343,35 +380,57 @@ def openai_call(system_prompt, user_prompt, model=None):
 
 # ---------- Auth ----------
 def auth_screen():
-    st.markdown('<div class="ogs-auth"><div class="ogs-eyebrow">Your organic growth command centre</div><h1>Organic Growth Studio</h1><p>Find opportunities. Fix issues. Measure organic growth—with clear evidence and practical next steps.</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="ogs-heading">Welcome back</div><div class="ogs-sub">Sign in to your workspace or create a free account to get started.</div>',unsafe_allow_html=True)
-    tab1,tab2=st.tabs(["Sign in","Create account"])
-    with tab1:
-        with st.form("signin"):
-            email=st.text_input("Email").strip().lower()
-            pw=st.text_input("Password",type="password")
-            ok=st.form_submit_button("Sign in",use_container_width=True)
-        if ok:
-            rows=query("SELECT * FROM users WHERE email=?",(email,))
-            if rows and verify_password(pw,rows[0]["password_hash"]):
-                st.session_state["user"]={"id":rows[0]["id"],"email":email}
-                ensure_subscription(rows[0]["id"]); st.rerun()
-            else: st.error("Email or password is incorrect.")
-    with tab2:
-        with st.form("signup"):
-            email2=st.text_input("Work email",key="signup_email").strip().lower()
-            pw2=st.text_input("Create password (12+ characters)",type="password",key="signup_pw")
-            pw3=st.text_input("Confirm password",type="password",key="signup_pw2")
-            ok2=st.form_submit_button("Create workspace",use_container_width=True)
-        if ok2:
-            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$",email2): st.error("Enter a valid email address.")
-            elif len(pw2)<12: st.error("Use at least 12 characters for your password.")
-            elif pw2!=pw3: st.error("Passwords do not match.")
-            else:
-                try:
-                    uid=execute("INSERT INTO users(email,password_hash,created_at) VALUES(?,?,?)",(email2,hash_password(pw2),now()))
-                    st.session_state["user"]={"id":uid,"email":email2}; ensure_subscription(uid); st.rerun()
-                except sqlite3.IntegrityError: st.error("An account with this email already exists.")
+    st.markdown("""<div class="ogs-public-wrap"><div class="ogs-public-nav"><div class="ogs-brand"><span class="ogs-brand-mark">↗</span>Organic Growth Studio</div><div class="ogs-nav-note">SEO clarity for teams that want to grow</div></div></div>""", unsafe_allow_html=True)
+    left, right = st.columns([1.12, .88], gap="large", vertical_alignment="top")
+    with left:
+        st.markdown("""<div class="ogs-public-hero">
+          <div class="ogs-pill"><span>✦</span> Search + AI visibility workspace</div>
+          <h1>Make your next growth move <span style="color:#6557ee">with confidence.</span></h1>
+          <p>Find the technical issues holding your site back, uncover search opportunities, and track how your brand appears in AI answers—with evidence you can act on.</p>
+          <div class="ogs-feature-row"><span class="ogs-feature">◈ Technical SEO audits</span><span class="ogs-feature">⌕ Search performance</span><span class="ogs-feature">✧ AI visibility tracking</span><span class="ogs-feature">↗ Clear next steps</span></div>
+          <div class="ogs-preview-shell">
+            <div class="ogs-preview-top"><span>✦ ORGANIC GROWTH OVERVIEW</span><span><i class="ogs-live-dot"></i>Project workspace</span></div>
+            <div class="ogs-preview-body">
+              <div><div class="ogs-mini-label">WEBSITE HEALTH</div><div class="ogs-mini-score">—<span style="font-size:13px;color:#8992a5"> / 100</span></div><div class="ogs-mini-bar"><span style="width:62%"></span></div><div style="font-size:9px;color:#7b8599">Your score appears after your first crawl</div>
+                <div class="ogs-mini-item"><span class="ogs-mini-icon">⌕</span><span><b>Technical audit</b><br><span style="color:#8790a3">Prioritised issues and evidence</span></span></div>
+                <div class="ogs-mini-item"><span class="ogs-mini-icon">✧</span><span><b>AI search readiness</b><br><span style="color:#8790a3">Track observed brand mentions</span></span></div>
+              </div>
+              <div><div class="ogs-mini-label">GROWTH SIGNALS</div><div class="ogs-mini-stat"><b>Search</b><span>Queries, pages and clicks from your data</span></div><div class="ogs-mini-stat"><b>AI visibility</b><span>Recorded answers, citations and sentiment</span></div><div class="ogs-mini-stat"><b>Next actions</b><span>Turn findings into a practical worklist</span></div></div>
+            </div>
+          </div>
+          <div class="ogs-trustline" style="justify-content:flex-start"><span>Evidence-first recommendations</span><span>No invented metrics</span><span>Free to get started</span></div>
+        </div>
+        <div class="ogs-public-heading">One clear view of your organic growth.</div><div class="ogs-public-sub">Designed for business owners and SEO teams who need to know what to fix next—and why.</div>""", unsafe_allow_html=True)
+    with right:
+        st.markdown('<div class="ogs-auth-card"><div class="ogs-pill" style="margin-bottom:14px">Get started</div><h3>Welcome to your workspace</h3><p>Sign in to continue, or create your free account to audit your first website.</p></div>', unsafe_allow_html=True)
+        tab1,tab2=st.tabs(["Sign in", "Create account"])
+        with tab1:
+            with st.form("signin"):
+                email=st.text_input("Email",placeholder="you@company.com").strip().lower()
+                pw=st.text_input("Password",type="password",placeholder="Enter your password")
+                ok=st.form_submit_button("Sign in to workspace",use_container_width=True)
+            if ok:
+                rows=query("SELECT * FROM users WHERE email=?",(email,))
+                if rows and verify_password(pw,rows[0]["password_hash"]):
+                    st.session_state["user"]={"id":rows[0]["id"],"email":email}
+                    ensure_subscription(rows[0]["id"]); st.rerun()
+                else: st.error("Email or password is incorrect.")
+        with tab2:
+            with st.form("signup"):
+                email2=st.text_input("Work email",key="signup_email",placeholder="you@company.com").strip().lower()
+                pw2=st.text_input("Create password (12+ characters)",type="password",key="signup_pw",placeholder="Use at least 12 characters")
+                pw3=st.text_input("Confirm password",type="password",key="signup_pw2",placeholder="Re-enter your password")
+                ok2=st.form_submit_button("Create free workspace",use_container_width=True)
+            if ok2:
+                if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$",email2): st.error("Enter a valid email address.")
+                elif len(pw2)<12: st.error("Use at least 12 characters for your password.")
+                elif pw2!=pw3: st.error("Passwords do not match.")
+                else:
+                    try:
+                        uid=execute("INSERT INTO users(email,password_hash,created_at) VALUES(?,?,?)",(email2,hash_password(pw2),now()))
+                        st.session_state["user"]={"id":uid,"email":email2}; ensure_subscription(uid); st.rerun()
+                    except sqlite3.IntegrityError: st.error("An account with this email already exists.")
+        st.markdown('<div class="ogs-footer-note">Private workspace · Real data · No fabricated metrics</div>', unsafe_allow_html=True)
 
 # ---------- Main UI ----------
 if not current_user():
