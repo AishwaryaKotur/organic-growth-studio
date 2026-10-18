@@ -1,6 +1,6 @@
 import io, ipaddress, socket, time, re
 from collections import deque
-from urllib.parse import urljoin, urlparse, urldefrag, urlunparse
+from urllib.parse import urljoin, urlparse, urldefrag, urlunparse, parse_qsl, urlencode
 from urllib.robotparser import RobotFileParser
 import pandas as pd
 import requests
@@ -8,14 +8,23 @@ import streamlit as st
 from bs4 import BeautifulSoup
 
 APP="Organic Growth Studio"
-UA="OrganicGrowthStudioAudit/1.0 (+authorized SEO audit; respects robots.txt)"
+VERSION="1.2"
+UA="OrganicGrowthStudioAudit/1.2 (+authorized SEO audit; respects robots.txt)"
 TIMEOUT=12
-st.set_page_config(page_title=APP,page_icon="↗",layout="wide")
+st.set_page_config(page_title=f"{APP} v{VERSION}",page_icon="↗",layout="wide")
 
+TRACKING_PARAMS={"gclid","fbclid","msclkid","dclid","gbraid","wbraid","srsltid","yclid","mc_cid","mc_eid"}
 def norm(u):
+    """Normalize URL fragments and common tracking parameters without dropping functional query params."""
     u,_=urldefrag(u.strip()); p=urlparse(u)
-    if p.scheme not in ("http","https") or not p.hostname or p.username or p.password: return None
-    return urlunparse((p.scheme.lower(),p.netloc.lower(),p.path or "/", "",p.query,""))
+    if p.scheme.lower() not in ("http","https") or not p.hostname or p.username or p.password: return None
+    try: host=p.hostname.encode("idna").decode("ascii").lower()
+    except UnicodeError: return None
+    port=p.port
+    netloc=host if port is None or (p.scheme.lower()=="http" and port==80) or (p.scheme.lower()=="https" and port==443) else f"{host}:{port}"
+    query=urlencode([(k,v) for k,v in parse_qsl(p.query,keep_blank_values=True) if not (k.lower() in TRACKING_PARAMS or k.lower().startswith("utm_"))])
+    path=re.sub(r"/{2,}","/",p.path or "/")
+    return urlunparse((p.scheme.lower(),netloc,path,"",query,""))
 def public_host(host):
     try:
         ips={x[4][0] for x in socket.getaddrinfo(host,None)}
@@ -64,7 +73,7 @@ def parse_page(requested,res):
     h1=[x.get_text(" ",strip=True) for x in s.find_all("h1")]
     robots=" ".join((x.get("content") or "") for x in s.find_all("meta",attrs={"name":re.compile("^robots$",re.I)})).lower()
     noindex="noindex" in robots or "noindex" in res["headers"].get("X-Robots-Tag","").lower()
-    imgs=s.find_all("img"); missing=sum(1 for x in imgs if x.get("alt") is None or not x.get("alt","").strip())
+    imgs=s.find_all("img"); missing=sum(1 for x in imgs if not x.has_attr("alt")); empty_alt=sum(1 for x in imgs if x.has_attr("alt") and not str(x.get("alt") or "").strip())
     links=[]
     for a in s.find_all("a",href=True):
         u=norm(urljoin(res["url"],a["href"]))
@@ -74,36 +83,45 @@ def parse_page(requested,res):
     "Title":title,"Title Length":len(title),"Meta Description":desc,"Description Length":len(desc),
     "H1 Count":len(h1),"H1 Text":" | ".join(h1[:3]),"Canonical":canonical,"Noindex":noindex,
     "Word Count (rough)":len(words),"H2 Count":len(s.find_all("h2")),"Images":len(imgs),
-    "Images Missing Alt":missing,"JSON-LD Blocks":len(s.find_all("script",attrs={"type":re.compile("application/ld\\+json",re.I)})),
+    "Images Missing Alt Attribute":missing,"Images With Empty Alt":empty_alt,"JSON-LD Blocks":len(s.find_all("script",attrs={"type":re.compile("application/ld\\+json",re.I)})),
     "Internal Links":sum(same(res["url"],u) for u,_ in links),"External Links":sum(not same(res["url"],u) for u,_ in links),"_links":links}
 def findings(row):
     out=[]; url=row["Final URL"]
-    def add(p,i,e,a,impact,effort="Low"):out.append({"Priority":p,"URL":url,"Issue":i,"Evidence":e,"Recommended Action":a,"Potential Impact":impact,"Effort":effort})
-    if row["HTTP Status"]>=400:add("P1","Page returns error status",f"HTTP {row['HTTP Status']}","Confirm whether URL should exist; fix or redirect to the closest relevant replacement.","Users and crawlers may not access the page.","Medium")
-    if not row["Title"]:add("P1","Missing title tag","No <title> element detected.","Add a unique, descriptive title reflecting page intent.","Page identification in search results may be weaker.")
-    elif row["Title Length"]<15 or row["Title Length"]>60:add("P2","Review title length",f"{row['Title Length']} characters.","Review clarity and usefulness; character count is a heuristic, not a Google limit.","Title may be unclear or truncated.")
-    if not row["Meta Description"]:add("P2","Missing meta description","No description detected.","Add a useful, page-specific summary; search engines may still generate their own snippet.","Less control over search-result messaging.")
-    elif row["Description Length"]<50 or row["Description Length"]>170:add("P3","Review meta description",f"{row['Description Length']} characters.","Check uniqueness and usefulness; length is only a guideline.","Snippet may be rewritten.")
-    if row["H1 Count"]==0:add("P2","No H1 detected","No <h1> element found.","Add a clear primary heading if useful for page structure/accessibility.","Page purpose may be less clear.")
-    elif row["H1 Count"]>1:add("P3","Multiple H1 headings",f"{row['H1 Count']} found.","Review heading hierarchy; multiple H1s are not automatically a ranking error.","Structure may be harder to scan.")
-    if row["Noindex"]:add("P1","Noindex directive present","Robots meta or X-Robots-Tag includes noindex.","Confirm exclusion is intentional; remove only if indexing is desired.","Page may be excluded from search.")
-    if not row["Canonical"]:add("P2","No canonical detected","No canonical link element found.","Assess duplicate URL risk and add an appropriate canonical when useful.","Duplicate URL signals may be less explicit.")
-    if row["Images Missing Alt"]:add("P2","Images missing alt attributes",f"{row['Images Missing Alt']} of {row['Images']} images have blank/missing alt.","Describe informative images; use empty alt for decorative images. Avoid keyword stuffing.","Accessibility and image context may be weaker.")
-    if row["Word Count (rough)"]<100:add("P3","Very little extractable text",f"About {row['Word Count (rough)']} words.","Check if the page answers its intended need; don't add text just to hit a word count.","Value proposition may be under-explained.","Medium")
+    def add(p,i,e,a,impact,effort="Low",confidence="High",why=""):
+        out.append({"Priority":p,"URL":url,"Issue":i,"Evidence":e,"Recommended Action":a,"Why It Matters":why or impact,"Potential Impact":impact,"Effort":effort,"Confidence":confidence})
+    status=row["HTTP Status"]
+    if status>=500:add("P1","Server error",f"HTTP {status}","Check server logs and restore the page if it should be available.","Visitors and crawlers may be unable to access the page.","High","High","Server errors can block access; verify whether this was transient.")
+    elif status>=400:add("P1","Client error",f"HTTP {status}","Confirm whether the URL should exist; fix it or redirect to the closest relevant replacement.","Visitors and crawlers may not access the intended page.","Medium","High","Verify the URL and response before changing redirects.")
+    if not row["Title"]:add("P1","Missing title tag","No non-empty <title> element detected.","Add a unique, descriptive title that reflects the page's actual purpose.","Search engines and users have less useful page-identification context.","Low","High")
+    elif row["Title Length"]<15 or row["Title Length"]>60:add("P3","Review title wording/length",f"Title is {row['Title Length']} characters.","Review whether the title is specific, distinct and useful; do not change it based on character count alone.","The title may be vague, repetitive or truncated in some search layouts.","Low","Medium","Length is a review heuristic, not a Google limit or proof of an SEO problem.")
+    if not row["Meta Description"]:add("P2","Missing meta description","No non-empty meta description detected.","Write a unique summary that accurately describes the page and gives searchers a reason to visit.","Search engines may generate a snippet from page content instead.","Low","High","A meta description is not a direct ranking guarantee.")
+    elif row["Description Length"]<50 or row["Description Length"]>170:add("P3","Review meta description",f"Description is {row['Description Length']} characters.","Review clarity, uniqueness and accuracy; use length as a prompt for review, not a hard rule.","The snippet may be less useful or may be rewritten.","Low","Medium","Snippet display varies by query and device.")
+    if row["H1 Count"]==0:add("P2","No H1 heading detected","No <h1> element found in fetched HTML.","Add a clear primary heading if it helps users understand the page and supports its content structure.","The main topic may be less immediately clear to visitors.","Low","High","This is a content-structure observation, not proof of a ranking penalty.")
+    elif row["H1 Count"]>1:add("P3","Review multiple H1 headings",f"{row['H1 Count']} H1 elements detected.","Check that the heading hierarchy is clear; multiple H1s are not automatically an SEO error.","Page structure may be harder to scan if headings are poorly organized.","Low","Medium")
+    if row["Noindex"]:add("P1","Noindex directive present","Robots meta or X-Robots-Tag includes noindex.","Confirm that exclusion from search is intentional; change the directive only if the page should be indexable.","If honored, the page may be excluded from search results.","Low","High","Noindex can be correct for private, duplicate, utility or campaign pages.")
+    if row["Canonical"] and row["Canonical"]!=url:add("P2","Canonical points to another URL",f"Canonical target: {row['Canonical']}","Verify that the canonical target is the intended preferred equivalent and is accessible.","Search engines may consolidate signals toward the canonical target.","Medium","Medium","Cross-URL canonicals can be intentional; compare page content and indexing goals.")
+    elif not row["Canonical"] and urlparse(url).query:add("P3","Review canonical on parameterized URL",f"URL contains query parameters: {urlparse(url).query}","Check for duplicate URL variants and add a canonical only when there is a clear preferred URL.","Duplicate URL variants may be harder to consolidate.","Low","Low","A missing canonical alone is not necessarily an issue.")
+    if row["Images Missing Alt Attribute"]:add("P2","Images missing alt attributes",f"{row['Images Missing Alt Attribute']} of {row['Images']} images have no alt attribute.","Add concise, contextual alt text to informative images. For decorative images, use an explicitly empty alt attribute rather than omitting the attribute.","Missing alternatives can reduce accessibility and make image purpose less available to assistive technology.","Medium","High","Empty alt attributes are intentionally not counted as missing; review whether each image is informative or decorative.")
+    if row["Word Count (rough)"]<100:add("P3","Review limited extractable text",f"About {row['Word Count (rough)']} words extracted from HTML.","Check whether the page answers its intended user need; do not add text solely to reach a word count.","Important information may be missing from the fetched HTML or the page may intentionally be concise.","Medium","Low","This rough count can undercount JavaScript-rendered content.")
     return out
+
 def score(df):
+    """Transparent heuristic: average per-page deductions; not a search-engine score."""
     if df.empty:return 0
     vals=[]
     for _,r in df.iterrows():
         x=100
-        if not r["Title"]:x-=10
+        if not r["Title"]:x-=15
         if not r["Meta Description"]:x-=5
         if r["H1 Count"]==0:x-=5
-        if r["Noindex"]:x-=8
-        if r["HTTP Status"]>=400:x-=15
-        x-=min(5,r["Images Missing Alt"])
+        if r["Noindex"]:x-=10
+        if r["HTTP Status"]>=500:x-=25
+        elif r["HTTP Status"]>=400:x-=20
+        # Penalize only missing alt attributes, not intentionally empty alt values.
+        x-=min(5,int(r.get("Images Missing Alt Attribute",0)))
         vals.append(max(0,x))
     return round(sum(vals)/len(vals))
+
 def aeo_checklist(site):
     return pd.DataFrame([
       {"Area":"AI crawler access","Check":"Review robots.txt and relevant platform crawler documentation","Status":"Needs manual verification","Evidence / notes":""},
@@ -123,6 +141,17 @@ def excel(pages,finds,summary,aeo):
         pages.drop(columns=["_links"],errors="ignore").to_excel(w,sheet_name="Page Audit",index=False)
         finds.to_excel(w,sheet_name="SEO Findings",index=False)
         aeo.to_excel(w,sheet_name="AEO Checklist",index=False)
+        from openpyxl.styles import PatternFill, Font
+        for ws in w.book.worksheets:
+            ws.freeze_panes="A2"
+            ws.auto_filter.ref=ws.dimensions
+            for col in ws.columns:
+                letter=col[0].column_letter
+                max_len=max((len(str(cell.value)) if cell.value is not None else 0) for cell in col[:150])
+                ws.column_dimensions[letter].width=min(max(max_len+2,12),55)
+            for cell in ws[1]:
+                cell.font=Font(bold=True,color="FFFFFF")
+                cell.fill=PatternFill("solid",fgColor="25324A")
     return b.getvalue()
 
 st.markdown("""<style>.block-container{padding-top:1.5rem;max-width:1400px}.hero{padding:1.4rem;border:1px solid rgba(120,120,120,.3);border-radius:18px;margin-bottom:1rem}.eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:.72rem;opacity:.7;font-weight:700}</style><div class="hero"><div class="eyebrow">SEO · AEO · Organic growth</div><h1 style="margin:.35rem 0">Organic Growth Studio</h1><p style="font-size:1.08rem;margin:0">Improve traditional search visibility, answer-engine readiness, and the path from discovery to qualified leads.</p></div>""",unsafe_allow_html=True)
@@ -133,8 +162,8 @@ with st.sidebar:
     delay=st.slider("Delay between requests (seconds)",0.5,3.0,1.0,0.5)
     st.caption("Audit only sites you own or are authorized to assess. Checks robots.txt and uses a conservative crawl rate.")
     run=st.button("Run website audit",type="primary",use_container_width=True)
-    st.divider();st.caption("V1 checks page metadata, headings, canonicals, noindex, image alt, text volume, status and link counts.")
-st.markdown("### A practical first version")
+    st.divider();st.caption(f"V{VERSION} improves URL normalization, evidence, confidence labels, alt-attribute handling and Excel readability.")
+st.markdown(f"### Audit quality release · V{VERSION}")
 st.write("Crawls a limited number of same-site HTML pages, checks common SEO signals, and exports an Excel report with an AEO readiness checklist. AEO checks require human review and repeatable prompt testing; this is not a ranking or citation predictor.")
 if run:
     u=norm(site if site.startswith(("http://","https://")) else "https://"+site)
@@ -168,13 +197,14 @@ if run:
         st.stop()
     pages=pd.DataFrame(rows);allf=[]
     for row in rows:allf.extend(findings(row))
-    fcols=["Priority","URL","Issue","Evidence","Recommended Action","Potential Impact","Effort"]
+    fcols=["Priority","URL","Issue","Evidence","Recommended Action","Why It Matters","Potential Impact","Effort","Confidence"]
     fdf=pd.DataFrame(allf,columns=fcols)
     if not fdf.empty:
         fdf["_n"]=fdf.Priority.map({"P1":0,"P2":1,"P3":2});fdf=fdf.sort_values(["_n","Issue"]).drop(columns="_n")
     summary=pd.DataFrame([
     {"Metric":"Pages audited","Value":len(pages),"Notes":"Limited to configured same-site HTML page cap."},
-    {"Metric":"Diagnostic score","Value":score(pages),"Notes":"Heuristic only; not a Google metric or ranking forecast."},
+    {"Metric":"Diagnostic score","Value":score(pages),"Notes":"Transparent heuristic based on selected checks; not a Google metric or ranking forecast."},
+    {"Metric":"Images missing alt attribute","Value":int(pages["Images Missing Alt Attribute"].sum()),"Notes":"Empty alt attributes are not counted; they can be correct for decorative images."},
     {"Metric":"Pages with HTTP errors","Value":int((pages["HTTP Status"]>=400).sum()),"Notes":"Confirm whether errors are expected or broken URLs."},
     {"Metric":"Missing title tags","Value":int((pages.Title.fillna("")=="").sum()),"Notes":"Prioritize important pages."},
     {"Metric":"Missing meta descriptions","Value":int((pages["Meta Description"].fillna("")=="").sum()),"Notes":"Descriptions are not a direct ranking guarantee."},
@@ -186,11 +216,12 @@ if "audit" in st.session_state:
     st.divider();st.markdown(f"## Results: `{a['site']}`")
     c1,c2,c3,c4=st.columns(4);c1.metric("Pages audited",len(pages));c2.metric("Diagnostic score",f"{score(pages)}/100")
     c3.metric("P1 findings",int((fdf.Priority=="P1").sum()) if not fdf.empty else 0);c4.metric("Total findings",len(fdf))
-    st.info("Human review required. Confirm business impact, page intent and whether directives are intentional before changing a live site.")
+    st.info("Human review required. Confirm business impact, page intent and whether directives are intentional before changing a live site. Priorities and confidence are heuristics, not search-engine judgments.")
     t1,t2,t3,t4,t5=st.tabs(["Summary","SEO findings","Page audit","AEO readiness","Crawl notes"])
     with t1:
         st.dataframe(a["summary"],use_container_width=True,hide_index=True)
         st.markdown("**Recommended workflow**");st.write("Validate P1 findings on business-critical pages, confirm indexing intent, fix high-impact issues first, then measure outcomes with Search Console and analytics.")
+        st.caption("Score method: starts each page at 100 and applies documented deductions for missing title, missing description, missing H1, noindex, HTTP errors and missing alt attributes. It is a triage aid, not a ranking forecast.")
         if not fdf.empty:st.dataframe(fdf.head(12),use_container_width=True,hide_index=True)
     with t2:
         if fdf.empty:st.success("No findings triggered by these checks. This does not mean the site is fully optimized.")
@@ -214,7 +245,7 @@ if "audit" in st.session_state:
         if not a["skips"].empty:st.dataframe(a["skips"],use_container_width=True,hide_index=True)
         st.write("Fetch errors / skipped resources:",len(a["errors"]))
         if not a["errors"].empty:st.dataframe(a["errors"],use_container_width=True,hide_index=True)
-        st.caption("Not included yet: JS rendering, Search Console/GA4, backlinks, field Core Web Vitals, keyword clustering, automated AI-answer monitoring or citation verification.")
+        st.caption("Not included yet: JS rendering, Search Console/GA4, backlinks, field Core Web Vitals, keyword clustering, automated AI-answer monitoring or citation verification. V1.2 normalizes common tracking parameters but preserves other query parameters because they may affect page content.")
     st.download_button("Download audit report (.xlsx)",data=excel(pages,fdf,a["summary"],a["aeo"]),file_name="organic_growth_audit.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",type="primary")
 else:
     c1,c2,c3=st.columns(3)
