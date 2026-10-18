@@ -1,6 +1,10 @@
-# Organic Growth Studio V3.0
+# Organic Growth Studio — Guided Diagnostics Build
 
-A Streamlit-based organic growth workspace with technical SEO auditing, optional OpenAI recommendations, Search Console CSV imports, manually recorded AI visibility observations, competitor homepage comparisons, action tracking, and project/audit history.
+A Streamlit prototype built around one primary workflow:
+
+**Enter URL → adjust crawl scope → run diagnostics → review Site Health (SEO) → review AI Search Health → follow an evidence-backed fix plan.**
+
+The interface is intentionally simplified. It no longer asks users to navigate a collection of separate SEO tools before they can understand their website.
 
 ## Run locally
 
@@ -9,79 +13,66 @@ Python 3.10+ recommended.
 ```bash
 python -m venv .venv
 # Windows:
-.venv\Scripts\activate
+.venv\\Scripts\\activate
 # macOS/Linux:
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
+python -m pytest -q
 streamlit run app.py
 ```
 
-Open the local URL shown by Streamlit. Create an account from the sign-up screen.
+Create an account from the sign-in screen. After sign-in, enter a public website URL, choose the hostname or folder scope, and run the guided diagnostic.
 
-## Enable AI analysis
+## What this build actually checks
 
-Set a secret/environment variable:
+### 1. Site Health — SEO
+- Bounded same-origin HTML crawl with a page limit, crawl delay and robots.txt check.
+- HTTP status, title, meta description, H1 structure, canonical, noindex, image alt attributes, visible text length, JSON-LD presence and internal/external links.
+- Findings show observed evidence and suggested actions.
+- SEO score is a transparent internal heuristic—not a Google score or ranking forecast.
 
-```toml
-OPENAI_API_KEY = "your-api-key"
-OPENAI_MODEL = "gpt-4.1-mini"
-```
+### 2. AI Search Health — technical readiness
+- Checks the standard `/robots.txt`, `/sitemap.xml` and `/llms.txt` locations.
+- Parses robots directives for ten AI/search ecosystems: OpenAI/ChatGPT Search, Anthropic/Claude, Perplexity, Google AI Overviews/Gemini, Microsoft Copilot/Bing, Meta AI, Apple, Amazon, You.com and Brave.
+- Reviews crawled page signals such as structured data, headings, visible content and internal links.
+- Provides fixes with separate potential SEO and AEO/AI-search benefits.
+- Stores report evidence and provides CSV exports.
 
-For Streamlit Community Cloud, put these in App → Settings → Secrets. Never commit API keys. API usage is billed separately from a ChatGPT subscription.
+**Important:** AI Search Health measures technical access and content-readiness signals. It does not automatically query ChatGPT, Claude, Gemini, Perplexity or other assistants, and does not prove that a brand appears in their answers. Actual AI-answer visibility tracking still requires repeatable manual observations or a reliable, permitted data provider. A bot being allowed in robots.txt is not proof that the bot crawled, indexed, trained on, or cited the site.
 
-## Deploy to Streamlit Community Cloud
+## Data and cost
 
-1. Upload `app.py`, `requirements.txt`, and `README.md` to the root of a GitHub repository.
-2. In Streamlit Community Cloud, create/redeploy the app using `app.py` as the main file.
-3. Configure the OpenAI secret only if you want AI recommendations.
-4. Create an account and a project.
+- No paid API key is required for the guided diagnostic checks.
+- Website checks use public HTTP responses and HTML.
+- The app does not render JavaScript, measure real-user Core Web Vitals, access a proprietary backlink/keyword database, or guarantee search/AI outcomes.
+- `ui_preview.html` is an interactive standalone design preview. Its example report is explicitly illustrative and does not run a website crawl. The Streamlit app runs the actual diagnostic code.
 
-## Features included
+## Deployment to Streamlit Community Cloud
 
-- Account registration/sign-in with PBKDF2 password hashing (prototype-grade auth)
-- Multiple projects per account, local SQLite persistence
-- Limited same-origin HTML crawler, robots.txt check, request delay and public-host checks
-- SEO checks: HTTP status, title, description, H1, canonical, noindex, image alt, text volume, JSON-LD presence, internal links
-- Findings with priority, evidence and recommended action
-- Optional OpenAI grounded audit recommendations
-- Search Console CSV import and query summaries
-- Manual AI visibility observation tracking with mention/citation rates
-- Competitor homepage on-page signal comparison
-- Action center, task status tracking, audit and AI report history
-- CSV exports
+1. Put `app.py`, `requirements.txt`, `.streamlit/config.toml`, and this README in the GitHub repository connected to the app.
+2. Configure the deployed app to use `app.py` as the entry point.
+3. Commit and push the intended release; Streamlit rebuilds the app from the connected repository.
+4. Run the workflow on a staging deployment before replacing the current production app.
 
-## Important limitations — read before commercial use
+## Limitations before commercial launch
 
-This is a V3 product prototype, not a fully production-hardened SaaS service.
+This is a functional prototype, not a production-hardened multi-tenant SaaS product.
 
-- AI visibility tracking is manual; there is no automatic querying of ChatGPT, Gemini, Perplexity or Google AI Overviews.
-- Search Console integration imports CSV exports; OAuth/API connection is not implemented.
-- Competitor analysis is limited to public homepage HTML; there is no keyword database, backlink index, search-volume provider or rank tracker.
-- Subscription table/UI is informational only. Stripe payments, webhooks, entitlements and invoices are not implemented.
-- Scheduled scans and notifications are not run automatically. Use an external scheduler/worker and email provider before promising recurring reports.
-- SQLite is appropriate for a single-user/small prototype. Streamlit Community Cloud local storage may be ephemeral; use managed PostgreSQL and persistent storage for real client data.
-- Authentication lacks email verification, password reset, MFA, session hardening and formal security review. Do not use this prototype to store sensitive data or present it as enterprise-secure.
-- The crawler has conservative protections but has not undergone a security audit. Audit only sites you own or have explicit permission to assess.
-- SEO findings and scores are heuristic. They do not predict rankings, traffic, AI citations or leads.
-- The app does not render JavaScript, measure field Core Web Vitals, access backlinks, or automatically modify websites.
-- Respect site terms, robots directives, privacy requirements, API terms and data-provider licenses.
+- The crawler is bounded and not a full browser-rendered or large-scale crawler. Review SSRF protections and rate limits before public launch.
+- Robots and sitemap checks are based on standard root paths; sitemap discovery from robots.txt and sitemap indexes is not yet comprehensive.
+- AI platform rows show robots.txt permission signals, not verified crawler traffic or live AI answer results.
+- No automatic daily/weekly scans, scheduled jobs, email alerts or continuously refreshed AI answer monitoring are implemented.
+- Search Console OAuth/API, direct AI-provider APIs, third-party keyword/backlink data, Stripe billing and white-label agency accounts are not implemented in this guided build.
+- SQLite may not persist reliably on ephemeral hosting. Move to managed PostgreSQL with migrations/backups before serving paying clients.
+- Authentication is prototype-grade: no email verification, password reset, MFA or formal security review.
+- Run only against websites you own or are authorized to assess. Respect robots directives, site terms and applicable laws.
 
-## Recommended production hardening
+## Included files
 
-1. Move authentication to a mature identity provider or add verification/reset/MFA.
-2. Move data to managed PostgreSQL and add tenant-level authorization tests.
-3. Add a background worker and scheduler for crawling and notifications.
-4. Implement Google OAuth/Search Console API with explicit consent.
-5. Add approved AI-search data sources or clearly documented manual observation workflows.
-6. Integrate Stripe checkout and webhook-verified subscription entitlements.
-7. Add monitoring, backups, rate limits, security review, privacy policy and terms of service.
-
-## Project layout
-
-- `app.py` — Streamlit application
-- `requirements.txt` — dependencies
-- `README.md` — setup, deployment and limitations
-
-
-## Product build blueprint
-See `PRODUCT_BUILD_BLUEPRINT.md` for the full feature specification, acceptance criteria, architecture requirements, and production launch gates. `ui_preview.html` is a static visual mockup with illustrative data, not the connected app.
+- `app.py` — Streamlit app and diagnostic engine
+- `ui_preview.html` — interactive, clearly labelled UI preview
+- `tests/` — deterministic helper and diagnostic tests
+- `requirements.txt` — runtime dependencies
+- `requirements-dev.txt` — test dependencies
+- `PRODUCT_BUILD_BLUEPRINT.md` — broader product roadmap and launch gates

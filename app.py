@@ -206,6 +206,29 @@ h1,h2,h3{color:#172033}
   background: #f3f7f3 !important;
   color: #244b36 !important;
 }
+
+/* Organic Growth Studio: distinct botanical diagnostic identity */
+:root{--ogs-ink:#182d25;--ogs-muted:#65776d;--ogs-line:#dce6db;--ogs-bg:#f7f7f0;--ogs-blue:#315d47;--ogs-nav:#183b30}
+.stApp{background:#f7f7f0;color:#182d25}
+[data-testid="stHeader"]{background:rgba(247,247,240,.95)}
+[data-testid="stSidebar"]{background:#173b30;border-right:1px solid #254c3d}
+[data-testid="stSidebar"] *{color:#f1f5e9}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"]{color:#b5cbb9}
+[data-testid="stSidebar"] button,[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]{background:#234b3c!important;border-color:#456b59!important;color:#f5f8ef!important}
+[data-testid="stMetric"]{border-color:#dce6db;box-shadow:0 3px 12px rgba(30,63,46,.04)}
+.stButton>button[kind="primary"],[data-testid="stBaseButton-primary"],[data-testid="stFormSubmitButton"] button{background:#d8f36a!important;color:#173b30!important;border:1px solid #c0df4f!important}
+.stButton>button[kind="primary"]:hover,[data-testid="stBaseButton-primary"]:hover,[data-testid="stFormSubmitButton"] button:hover{background:#c9e956!important;color:#173b30!important;box-shadow:0 5px 14px rgba(49,93,71,.16)!important}
+.stButton>button:not([kind="primary"]),[data-testid="stDownloadButton"] button,[data-testid="stBaseButton-secondary"]{background:#fff!important;color:#244b36!important;border:1px solid #cbdacb!important}
+.stButton>button:hover,[data-testid="stBaseButton-secondary"]:hover{border-color:#779a7c!important;color:#244b36!important;background:#f1f7ed!important}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stSelectbox"] div[data-baseweb="select"]{background:#fff!important;color:#18352c!important}
+.ogs-eyebrow{color:#315d47}.ogs-heading{color:#182d25}.ogs-sub{color:#65776d}
+.ogs-hero{background:linear-gradient(125deg,#f0f6e9 0%,#fff 60%,#eef7f0 100%);border-color:#dce7d9}
+.ogs-public-hero{background:radial-gradient(circle at 85% 10%,#e5f5ce 0,transparent 29%),radial-gradient(circle at 10% 0%,#e7f0e6 0,transparent 37%),linear-gradient(135deg,#fbfcf7 0%,#fff 58%,#f7fff5 100%);border-color:#dce7d9}
+.ogs-brand-mark{background:#315d47;color:#d8f36a;box-shadow:0 5px 14px #315d4720}
+.ogs-pill{color:#315d47;border-color:#dce7d9;background:#f8fbf5}
+.ogs-auth-card{border-color:#dce7d9}
+[data-testid="stTextInput"] [data-baseweb="input"],[data-testid="stForm"] [data-baseweb="input"]{background:#fff!important;background-color:#fff!important;border:1px solid #cad9cb!important;border-radius:12px!important}
+[data-testid="stTextInput"] input,[data-testid="stForm"] input,[data-testid="stTextInput"] input:-webkit-autofill,[data-testid="stForm"] input:-webkit-autofill{background:#fff!important;background-color:#fff!important;color:#18352c!important;-webkit-text-fill-color:#18352c!important;box-shadow:0 0 0 1000px #fff inset!important}
 </style>
 """, unsafe_allow_html=True)
 
@@ -263,6 +286,15 @@ def init_db():
           provider_subscription_id TEXT DEFAULT '', updated_at TEXT NOT NULL,
           FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS diagnostic_runs(
+          id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL, created_at TEXT NOT NULL,
+          scope_mode TEXT NOT NULL, scope_url TEXT NOT NULL, seo_score INTEGER NOT NULL,
+          ai_score INTEGER NOT NULL, pages_count INTEGER NOT NULL,
+          seo_findings_json TEXT NOT NULL, ai_findings_json TEXT NOT NULL,
+          pages_json TEXT NOT NULL, crawl_notes_json TEXT NOT NULL,
+          FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_diagnostics_project ON diagnostic_runs(project_id,created_at);
         CREATE INDEX IF NOT EXISTS idx_audits_project ON audits(project_id,created_at);
         CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id,status);
         CREATE INDEX IF NOT EXISTS idx_visibility_project ON visibility_runs(project_id,tested_at);
@@ -434,7 +466,7 @@ def make_findings(pages):
         if p.get("internal_links",0)==0: add(p,"P2","Internal linking","No internal links detected","No same-origin links were detected in parsed HTML.","Check whether this page should link to relevant pages or be linked from navigation.","Medium")
     return findings
 
-def crawl_site(start_url, max_pages=25, delay=1.0):
+def crawl_site(start_url, max_pages=25, delay=0.5, scope_prefix=None):
     start=normalize_url(start_url)
     ok,msg=validate_public_url(start)
     if not ok: raise ValueError(msg)
@@ -443,6 +475,8 @@ def crawl_site(start_url, max_pages=25, delay=1.0):
     while todo and len(pages)<max_pages:
         url=normalize_url(todo.pop(0))
         if not url or url in seen or not same_origin(url,start): continue
+        if scope_prefix and not (urlparse(url).path == scope_prefix or urlparse(url).path.startswith(scope_prefix.rstrip("/") + "/")):
+            continue
         seen.add(url)
         if not robots_allowed(base,urlparse(url).path or "/"):
             notes.append(f"Skipped robots-disallowed URL: {url}")
@@ -461,7 +495,8 @@ def crawl_site(start_url, max_pages=25, delay=1.0):
             pages.append(page)
             for link in page["links"]:
                 target=link["url"]
-                if same_origin(target,start) and target not in seen and len(seen)+len(todo)<max_pages*5:
+                in_scope = (not scope_prefix) or (urlparse(target).path == scope_prefix or urlparse(target).path.startswith(scope_prefix.rstrip("/") + "/"))
+                if same_origin(target,start) and in_scope and target not in seen and len(seen)+len(todo)<max_pages*5:
                     if urlparse(target).path.lower().endswith((".pdf",".jpg",".jpeg",".png",".gif",".svg",".webp",".zip",".xml",".json")): continue
                     todo.append(target)
             time.sleep(max(0.5,min(float(delay),10)))
@@ -538,365 +573,382 @@ def auth_screen():
                     except sqlite3.IntegrityError: st.error("An account with this email already exists.")
         st.markdown('<div class="ogs-footer-note">Private workspace · Real data · No fabricated metrics</div>', unsafe_allow_html=True)
 
-# ---------- Main UI ----------
+# ---------- Guided diagnostic engine ----------
+AI_DISCOVERY_PLATFORMS = [
+    {"platform":"OpenAI / ChatGPT Search", "agents":["OAI-SearchBot", "ChatGPT-User"]},
+    {"platform":"Anthropic / Claude", "agents":["Claude-SearchBot", "Claude-User", "ClaudeBot"]},
+    {"platform":"Perplexity", "agents":["PerplexityBot", "Perplexity-User"]},
+    {"platform":"Google AI Overviews / Gemini", "agents":["Googlebot", "Google-Extended"]},
+    {"platform":"Microsoft Copilot / Bing", "agents":["Bingbot"]},
+    {"platform":"Meta AI", "agents":["Meta-ExternalAgent"]},
+    {"platform":"Apple ecosystem", "agents":["Applebot", "Applebot-Extended"]},
+    {"platform":"Amazon AI / Alexa", "agents":["Amazonbot"]},
+    {"platform":"You.com", "agents":["YouBot"]},
+    {"platform":"Brave Search ecosystem", "agents":["Bravebot"]},
+]
+
+def fetch_public_text(url, limit=500_000):
+    """Fetch one public text resource without following redirects; returns evidence, not assumptions."""
+    ok, msg = validate_public_url(url)
+    if not ok:
+        return {"ok":False,"status":None,"text":"","error":msg,"url":url}
+    try:
+        r=requests.get(url,headers={"User-Agent":UA},timeout=8,allow_redirects=False,stream=True)
+        status=r.status_code
+        if 300 <= status < 400:
+            location=r.headers.get("Location",""); r.close()
+            return {"ok":False,"status":status,"text":"","error":f"Redirect to {location or 'another URL'} was not followed during the safety check.","url":url}
+        chunks=[]; total=0
+        for chunk in r.iter_content(32768):
+            total+=len(chunk)
+            if total>limit: break
+            chunks.append(chunk)
+        text=b"".join(chunks).decode(r.encoding or "utf-8",errors="replace")
+        r.close()
+        return {"ok":200<=status<300,"status":status,"text":text,"error":"" if 200<=status<300 else f"HTTP {status}","url":url}
+    except Exception as exc:
+        return {"ok":False,"status":None,"text":"","error":str(exc)[:180],"url":url}
+
+def analyze_ai_search_health(start_url, pages):
+    """Free technical AI-search readiness checks; does not pretend to query model answers."""
+    start=normalize_url(start_url); parsed=urlparse(start); origin=f"{parsed.scheme}://{parsed.netloc}"
+    robots=fetch_public_text(urljoin(origin,"/robots.txt"),200_000)
+    sitemap=fetch_public_text(urljoin(origin,"/sitemap.xml"),500_000)
+    llms=fetch_public_text(urljoin(origin,"/llms.txt"),200_000)
+    findings=[]; platform_rows=[]
+    def add(priority,category,issue,evidence,fix,seo_benefit,aeo_benefit,gain,confidence="Medium"):
+        findings.append({"priority":priority,"category":category,"issue":issue,"evidence":evidence,"fix":fix,
+          "seo_benefit":seo_benefit,"aeo_benefit":aeo_benefit,"expected_gain":gain,"confidence":confidence})
+    if robots["ok"]:
+        robots_parser=None
+        try:
+            from urllib.robotparser import RobotFileParser
+            robots_parser=RobotFileParser(); robots_parser.set_url(urljoin(origin,"/robots.txt")); robots_parser.parse(robots["text"].splitlines())
+        except Exception: pass
+        for entry in AI_DISCOVERY_PLATFORMS:
+            statuses=[]
+            for agent in entry["agents"]:
+                if robots_parser:
+                    try: allowed=robots_parser.can_fetch(agent,start)
+                    except Exception: allowed=True
+                    statuses.append((agent,allowed))
+            if not statuses:
+                status="Could not parse rules"
+            elif all(x[1] for x in statuses): status="Allowed at tested URL"
+            elif not any(x[1] for x in statuses): status="Blocked at tested URL"
+            else: status="Mixed rules"
+            platform_rows.append({"platform":entry["platform"],"status":status,"user_agents":", ".join(x[0] for x in statuses)})
+        blocked=[r for r in platform_rows if r["status"]=="Blocked at tested URL"]
+        if blocked:
+            add("P1","AI crawler access","AI discovery crawlers appear blocked by robots.txt",
+                "; ".join(r["platform"] for r in blocked)+" are disallowed at the tested URL according to parsed robots.txt rules.",
+                "Review the matching User-agent and Disallow rules. Only allow crawlers you intend to serve; verify the exact rules and legal/privacy implications before changing them.",
+                "If Google/Bing crawlers are blocked, eligible pages may be harder to discover or refresh.",
+                "AI search crawlers may be unable to fetch content for retrieval or citation.",
+                "Restores crawler access where intentional; does not guarantee citations.","High")
+    else:
+        platform_rows=[{"platform":x["platform"],"status":"Robots.txt unavailable or unverified","user_agents":", ".join(x["agents"])} for x in AI_DISCOVERY_PLATFORMS]
+        add("P2","AI crawler access","robots.txt could not be verified",robots["error"] or f"HTTP {robots['status']}",
+            "Check whether /robots.txt should be publicly available and ensure it returns a valid text response. A missing robots.txt is not automatically an error.",
+            "Clear crawl directives help search crawlers interpret intended access.","Crawler access for AI search systems remains unverified.","Removes uncertainty about crawl permissions.","Medium")
+    if sitemap["ok"]:
+        sitemap_signal=bool(re.search(r"<urlset|<sitemapindex",sitemap["text"],re.I))
+        if sitemap_signal:
+            add("P3","Discovery","XML sitemap detected",f"{urljoin(origin,'/sitemap.xml')} returned HTTP {sitemap['status']} and contains a sitemap root element.",
+                "Keep the sitemap current, canonical, and limited to indexable URLs; submit it in search consoles where appropriate.",
+                "Can help search engines discover canonical URLs.","A clearer URL inventory may help discovery systems locate useful pages.","Improves discovery signals; inclusion is not guaranteed.","High")
+        else:
+            add("P2","Discovery","Sitemap URL responds but format was not confirmed",f"HTTP {sitemap['status']} at /sitemap.xml; expected urlset or sitemapindex markup was not found.",
+                "Verify the sitemap format and whether the actual sitemap is published at another path; check robots.txt for its location.",
+                "A valid sitemap can support URL discovery.","A clean page inventory may help discovery systems find key URLs.","Makes URL discovery more reliable if a sitemap is needed.","Medium")
+    else:
+        add("P2","Discovery","XML sitemap not found at the default path",sitemap["error"] or f"HTTP {sitemap['status']} at /sitemap.xml",
+            "Check robots.txt and your CMS for the canonical sitemap location. Publish and maintain an XML sitemap if the site benefits from one.",
+            "Supports discovery of important canonical pages, especially on larger sites.","Provides a structured inventory of pages that AI-enabled search systems may discover.","Improves discovery paths; it does not cause AI mentions by itself.","Medium")
+    if llms["ok"] and llms["text"].strip():
+        add("P3","AI content guidance","llms.txt is present",f"/llms.txt returned HTTP {llms['status']} with {len(llms['text'])} characters.",
+            "Keep the file accurate and link to high-value public documentation and pages. Treat llms.txt as an emerging convention, not a universally supported ranking signal.",
+            "Maintaining useful documentation can improve clarity for human and machine readers.","May provide a concise map of important content to systems that choose to consume it; adoption is not universal.","Potential discoverability aid with uncertain platform uptake.","Medium")
+    else:
+        add("P3","AI content guidance","No usable llms.txt detected at the standard path",llms["error"] or "The file was empty or not available at /llms.txt.",
+            "Optional: create a concise /llms.txt linking to authoritative product, service, pricing, FAQ and documentation pages. Do not treat it as a requirement or guaranteed AI-ranking factor.",
+            "A clear documentation structure can help users and crawlers navigate important pages.","Some AI-oriented tools may use this file as a content map; many may ignore it.","Low-cost optional enhancement; impact is uncertain.","Low")
+    if pages:
+        schema_pages=sum(1 for p in pages if p.get("jsonld_blocks",0)>0)
+        descriptive_pages=sum(1 for p in pages if p.get("title") and p.get("h1_count",0)>=1 and p.get("words",0)>=120)
+        internal_pages=sum(1 for p in pages if p.get("internal_links",0)>0)
+        ratio=schema_pages/len(pages)
+        if ratio < .3:
+            add("P2","Structured information","Structured data was detected on fewer than 30% of crawled pages",f"{schema_pages}/{len(pages)} crawled pages contain JSON-LD. This is a coverage signal, not proof of a defect.",
+                "Add only schema types that accurately describe visible page content (for example Organization, Product, Article or BreadcrumbList). Validate markup and never add fabricated ratings or claims.",
+                "Eligible structured data can help search engines understand page entities and may enable supported rich results.","Explicit entity and page-type signals can reduce ambiguity for systems that consume structured data.","Better machine-readable context; rich results and AI citations are not guaranteed.","Medium")
+        if descriptive_pages/len(pages)<.6:
+            add("P2","Answer-ready content","Many crawled pages lack a clear title, H1, or substantial visible copy",f"{descriptive_pages}/{len(pages)} pages passed the simple title + H1 + 120-word heuristic. This is a diagnostic heuristic, not a content-quality score.",
+                "For important pages, state the entity/service, intended audience and purpose early. Use descriptive headings, concise answers, original evidence and clear supporting details; do not add filler just to reach a word count.",
+                "Improves relevance and page comprehension when content better matches the search intent.","Clear, specific, quotable explanations are easier for answer systems to interpret when they retrieve the page.","Makes important information easier to understand and potentially cite.","Medium")
+        if internal_pages/len(pages)<.6:
+            add("P2","Content discovery","Internal linking signals are weak across the crawl",f"Only {internal_pages}/{len(pages)} crawled pages had at least one same-origin link.",
+                "Link related pages from useful navigation and contextual passages; use descriptive anchor text and ensure important pages are reachable from other pages.",
+                "Supports crawling, discovery and contextual relationships between pages.","Helps systems discover related evidence and understand topic relationships.","Improves pathways to important content.","Medium")
+    else:
+        add("P1","Content analysis","No pages were successfully crawled", "No parsed HTML pages are available for content-readiness checks.",
+            "Verify the URL, access rules, hosting response and robots.txt, then rerun the diagnostic.","SEO health cannot be assessed without crawl evidence.","AI content readiness cannot be assessed without crawl evidence.","Enables a meaningful diagnostic.","High")
+    # Score is a transparent technical readiness heuristic, not platform visibility.
+    penalty=sum({"P1":18,"P2":9,"P3":3}.get(x["priority"],2) for x in findings)
+    score=max(0,min(100,100-penalty))
+    return {"score":score,"findings":findings,"platforms":platform_rows,
+            "signals":{"robots_txt":"Verified" if robots["ok"] else "Unavailable / unverified",
+                       "sitemap":"Detected" if sitemap["ok"] and re.search(r"<urlset|<sitemapindex",sitemap["text"],re.I) else "Not confirmed",
+                       "llms_txt":"Detected" if llms["ok"] and llms["text"].strip() else "Not detected",
+                       "pages_reviewed":len(pages)},
+            "disclaimer":"This is technical AI-search readiness, not a measurement of brand mentions or ranking across AI assistants. Platform answers vary by prompt, geography, time and account. Direct visibility measurement requires repeatable live queries or provider integrations."}
+
+def seo_benefits(finding):
+    """Plain-language potential benefits by issue type; benefits are hypotheses, not guarantees."""
+    issue=(finding.get("issue","")+" "+finding.get("category","")).lower()
+    if any(k in issue for k in ("title","description","h1","heading","content","text")):
+        return ("A clearer page topic and search-intent match can improve relevance and snippet comprehension.",
+                "A specific, well-structured page can make the answer and source context easier for retrieval systems to interpret.")
+    if any(k in issue for k in ("noindex","canonical","http status","availability","indexability","redirect")):
+        return ("Correct indexability and canonical signals can help crawlers focus on the intended, accessible URL.",
+                "Making the canonical public source accessible and unambiguous may help answer systems retrieve the intended page.")
+    if any(k in issue for k in ("alt","image","accessibility")):
+        return ("Descriptive alt text improves accessibility and provides context for images where appropriate.",
+                "Accessible, contextual image descriptions can help systems understand relevant visual content when it is processed.")
+    if any(k in issue for k in ("json-ld","structured data")):
+        return ("Valid, relevant structured data can clarify entities and may support eligible search enhancements.",
+                "Explicit entity and page-type signals can reduce ambiguity for systems that consume structured data.")
+    if any(k in issue for k in ("internal link","linking","discovery")):
+        return ("Useful internal links support page discovery and contextual relationships across the site.",
+                "Links between related authoritative pages help retrieval systems find supporting context and source material.")
+    return ("Resolving a verified technical issue can improve crawlability, page clarity or usability depending on the affected page.",
+            "Clear, accessible source pages can improve the chance that systems can retrieve and interpret useful information; citations are not guaranteed.")
+
+def score_seo(pages, findings):
+    """A transparent internal heuristic; never presented as a Google score."""
+    if not pages: return 0
+    weighted=sum({"P1":12,"P2":5,"P3":2}.get(f.get("priority"),1) for f in findings)
+    return max(0,min(100,100-round(weighted/max(1,len(pages)))))
+
+def save_diagnostic(project_id, scope_mode, scope_url, seo, ai, created_at):
+    execute("INSERT INTO audits(project_id,created_at,score,pages,findings_json,pages_json) VALUES(?,?,?,?,?,?)",
+            (project_id,created_at,seo["score"],len(seo["pages"]),json.dumps(seo["findings"]),json.dumps(seo["pages"])))
+    execute("INSERT INTO diagnostic_runs(project_id,created_at,scope_mode,scope_url,seo_score,ai_score,pages_count,seo_findings_json,ai_findings_json,pages_json,crawl_notes_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (project_id,created_at,scope_mode,scope_url,seo["score"],ai["score"],len(seo["pages"]),json.dumps(seo["findings"]),json.dumps(ai),json.dumps(seo["pages"]),json.dumps(seo.get("notes",[]))))
+    for f in seo["findings"]:
+        if not query("SELECT id FROM tasks WHERE project_id=? AND url=? AND title=? AND status!='Done' LIMIT 1",(project_id,f.get("url",""),f["issue"])):
+            execute("INSERT INTO tasks(project_id,title,priority,category,url,evidence,recommendation,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (project_id,f["issue"],f["priority"],f["category"],f.get("url",""),f["evidence"],f["recommendation"],"Open",created_at))
+
+def load_diagnostic(run_id, project_id):
+    rows=query("SELECT * FROM diagnostic_runs WHERE id=? AND project_id=?",(run_id,project_id))
+    if not rows: return None
+    r=rows[0]
+    ai_payload=json.loads(r["ai_findings_json"])
+    if isinstance(ai_payload,list):
+        ai_payload={"score":r["ai_score"],"findings":ai_payload,"platforms":[],"signals":{},"disclaimer":"AI Search Health is technical readiness, not observed model visibility."}
+    return {"id":r["id"],"created_at":r["created_at"],"scope_mode":r["scope_mode"],"scope_url":r["scope_url"],
+            "seo":{"score":r["seo_score"],"pages":json.loads(r["pages_json"]),"findings":json.loads(r["seo_findings_json"]),"notes":json.loads(r["crawl_notes_json"])},
+            "ai": ai_payload}
+
+# ---------- Main UI: one guided workflow ----------
 if not current_user():
     auth_screen()
     st.stop()
 
-user=current_user()
-uid=user["id"]
-projects=get_projects(uid)
-# Action buttons can navigate to a page directly; keep the sidebar radio in sync.
-if st.session_state.get("jump_page"):
-    st.session_state["nav_page"] = st.session_state.pop("jump_page")
-
+user=current_user(); uid=user["id"]
 with st.sidebar:
-    st.markdown("## 🌱 Organic Growth Studio")
-    st.caption("ORGANIC GROWTH WORKSPACE")
+    st.markdown('<div class="ogs-brand"><span class="ogs-brand-mark">↗</span>Organic Growth Studio</div>',unsafe_allow_html=True)
+    st.caption("SEARCH + AI DISCOVERY DIAGNOSTICS")
+    st.markdown("---")
+    st.markdown("**Your workflow**")
+    st.markdown("<div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>01 · Enter a URL</div><div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>02 · Adjust scope</div><div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>03 · Review both health reports</div>",unsafe_allow_html=True)
+    st.markdown("---")
     st.caption(user["email"])
     if st.button("Sign out",use_container_width=True):
         st.session_state.pop("user",None); st.rerun()
-    st.divider()
-    page=st.radio("Workspace",["Overview","Website audit","AI recommendations","Search performance","AI visibility","Competitors","Action center","Reports","Settings"],key="nav_page",label_visibility="visible")
-    st.divider()
-    if st.button("＋ New project",use_container_width=True):
-        st.session_state["new_project"]=True
-    if projects:
-        project_options={f'{p["name"]} · {p["domain"]}':p["id"] for p in projects}
-        chosen=st.selectbox("Active project",list(project_options.keys()),key="active_project")
-        pid=project_options[chosen]
-        project=get_project(pid,uid)
-    else:
-        pid=None; project=None
-    if st.session_state.get("new_project") or not projects:
-        with st.form("new_project_form"):
-            st.markdown("### Create your first project")
-            pname=st.text_input("Project name",placeholder="Acme SaaS")
-            purl=st.text_input("Website URL",placeholder="https://example.com")
-            btype=st.text_input("Business type",placeholder="B2B SaaS")
-            target=st.text_input("Target customer",placeholder="Operations leaders at growing companies")
-            offer=st.text_input("Main product or service",placeholder="Customer support platform")
-            comps=st.text_input("Competitor domains (comma separated)",placeholder="competitor1.com, competitor2.com")
-            submit=st.form_submit_button("Create project",use_container_width=True)
-        if submit:
-            url=normalize_url(purl)
-            valid,msg=validate_public_url(url) if url else (False,"Enter a website URL.")
-            if not valid: st.error(msg)
+    all_runs=query("SELECT d.id,d.created_at,d.scope_url,d.seo_score,d.ai_score,p.id AS project_id FROM diagnostic_runs d JOIN projects p ON p.id=d.project_id WHERE p.user_id=? ORDER BY d.created_at DESC LIMIT 12",(uid,))
+    if all_runs:
+        st.markdown("**Recent diagnostics**")
+        options={f"{r['scope_url'][:24]} · {r['created_at'][:10]} · #{r['id']}":(r["id"],r["project_id"]) for r in all_runs}
+        selected_label=st.selectbox("Open a previous report",["New diagnostic",*options.keys()],label_visibility="collapsed",key="history_pick")
+        if selected_label!="New diagnostic":
+            rid,rpid=options[selected_label]
+            if st.button("Open report",use_container_width=True):
+                st.session_state["active_report"]=(rid,rpid); st.rerun()
+
+st.markdown("""
+<div class="ogs-public-hero" style="margin-bottom:18px;background:radial-gradient(circle at 92% 8%,#e3f5c8 0,transparent 27%),radial-gradient(circle at 0% 0%,#e4eee7 0,transparent 35%),#fff;border-color:#dce7dc">
+ <div class="ogs-pill" style="color:#285b40;border-color:#d7e6d8;background:#f7fbf5">ONE SCAN · TWO HEALTH REPORTS</div>
+ <h1 style="max-width:900px">Know what search engines can see.<br><span style="color:#315d47">Know what to fix next.</span></h1>
+ <p style="max-width:820px">Run a technical SEO audit first, then evaluate AI-search readiness. Get the evidence, the fix, and the expected benefit in one clear report.</p>
+</div>
+""",unsafe_allow_html=True)
+
+# A previously selected report can be reopened without rerunning a crawl.
+active_report=None
+if st.session_state.get("active_report"):
+    rid,rpid=st.session_state["active_report"]
+    active_report=load_diagnostic(rid,rpid)
+    if active_report:
+        owner_project=get_project(rpid,uid)
+        if owner_project:
+            st.caption(f"Viewing saved report for **{owner_project['domain']}** · {active_report['created_at'][:19]} UTC")
+        else:
+            active_report=None
+            st.session_state.pop("active_report",None)
+            st.warning("That saved report is not available in this account. Start a new diagnostic.")
+    if st.button("← Start a new diagnostic"):
+        st.session_state.pop("active_report",None); st.rerun()
+
+if active_report:
+    report=active_report
+else:
+    st.markdown('<div class="ogs-heading">Start your website diagnostic</div><div class="ogs-sub">Three steps. No SEO expertise required. You can change the scope before the scan begins.</div>',unsafe_allow_html=True)
+    with st.form("guided_diagnostic_form",clear_on_submit=False):
+        url_input=st.text_input("1 · Enter your website URL",placeholder="https://yourcompany.com",help="Use a website you own or are authorized to audit.")
+        scope_mode=st.radio("2 · Adjust crawl scope",["Entire entered hostname","Specific folder"],horizontal=True,help="The entered hostname may be a root domain or subdomain. The crawl stays on that hostname; choose a folder to limit the scan to that path.")
+        max_pages=st.select_slider("Maximum pages to inspect",options=[10,25,50,100],value=25,help="More pages take longer. This is a bounded HTML crawl, not a browser-rendered crawl.")
+        run_scan=st.form_submit_button("Run SEO + AI Search diagnostics →",type="primary",use_container_width=True)
+    st.markdown('<div class="ogs-trustline" style="justify-content:flex-start;margin:10px 0 20px"><span>SEO runs first</span><span>AI readiness runs second</span><span>Evidence-backed fixes</span><span>No fabricated AI visibility scores</span></div>',unsafe_allow_html=True)
+    if run_scan:
+        normalized=normalize_url(url_input)
+        valid,msg=validate_public_url(normalized) if normalized else (False,"Enter a full public website URL.")
+        if not valid:
+            st.error(msg)
+        else:
+            parsed=urlparse(normalized); root=f"{parsed.scheme}://{parsed.netloc}"
+            if scope_mode=="Entire entered hostname":
+                crawl_start=root; scope_prefix=None
             else:
-                try:
-                    execute("INSERT INTO projects(user_id,name,domain,business_type,target_customer,primary_offer,competitors,created_at) VALUES(?,?,?,?,?,?,?,?)",
-                      (uid,pname.strip() or urlparse(url).hostname,url,btype,target,offer,json.dumps([x.strip() for x in comps.split(",") if x.strip()]),now()))
-                    st.session_state["new_project"]=False; st.rerun()
-                except sqlite3.IntegrityError: st.error("This domain is already in your workspace.")
-    if project:
-        st.caption(f"Project created {project['created_at'][:10]}")
-
-if not project:
-    st.markdown('<div class="ogs-hero"><div class="ogs-eyebrow">Welcome to your workspace</div><h2>Your organic growth, in one place.</h2><p>Create your first project to run a website audit, find search opportunities and track real AI-answer observations. No demo metrics—your dashboard starts with your data.</p></div>',unsafe_allow_html=True)
-    st.markdown('<div class="ogs-empty"><div style="font-size:38px">🌱</div><h2>Start with your first website</h2><p style="color:#667085">Add a project to unlock your audit, recommendations and reporting workspace.</p></div>',unsafe_allow_html=True)
-    if st.button("＋ Create your first project",type="primary",use_container_width=False):
-        st.session_state["new_project"]=True
-        st.rerun()
-    st.caption("Your data is kept separate by account. Only metrics derived from saved project data will appear here.")
-    st.stop()
-
-def latest_audit(project_id):
-    rows=query("SELECT * FROM audits WHERE project_id=? ORDER BY created_at DESC LIMIT 1",(project_id,))
-    if not rows: return None
-    r=rows[0]
-    return {"id":r["id"],"created_at":r["created_at"],"score":r["score"],"pages":json.loads(r["pages_json"]),"findings":json.loads(r["findings_json"])}
-
-audit=latest_audit(pid)
-
-# Lightweight application header mirrors the approved preview layout.
-page_labels={"Overview":"Overview","Website audit":"Website audit","AI recommendations":"AI recommendations","Search performance":"Search performance","AI visibility":"AI visibility","Competitors":"Competitors","Action center":"Action center","Reports":"Reports","Settings":"Settings"}
-st.markdown(f'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e6eaf2;padding:0 2px 13px;margin-bottom:22px;color:#667085;font-size:12px"><span>Workspace / <b style="color:#172033">{html.escape(page_labels.get(page,page))}</b></span><span>{html.escape(user["email"])}</span></div>',unsafe_allow_html=True)
-
-def save_audit(result):
-    execute("INSERT INTO audits(project_id,created_at,score,pages,findings_json,pages_json) VALUES(?,?,?,?,?,?)",
-      (pid,result["created_at"],result["score"],len(result["pages"]),json.dumps(result["findings"]),json.dumps(result["pages"])))
-    # Seed action tasks from findings, avoiding identical open tasks.
-    for f in result["findings"]:
-        exists=query("SELECT id FROM tasks WHERE project_id=? AND url=? AND title=? AND status!='Done' LIMIT 1",(pid,f["url"],f["issue"]))
-        if not exists:
-            execute("INSERT INTO tasks(project_id,title,priority,category,url,evidence,recommendation,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-              (pid,f["issue"],f["priority"],f["category"],f["url"],f["evidence"],f["recommendation"],"Open",now()))
-
-def report_download(label,df,filename):
-    data=df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(label,data,filename,mime="text/csv",use_container_width=False)
-
-if page=="Overview":
-    safe_project_name = html.escape(str(project["name"]))
-    safe_project_domain = html.escape(str(project["domain"]))
-    tasks=query("SELECT * FROM tasks WHERE project_id=? AND status!='Done'",(pid,))
-    vis=query("SELECT * FROM visibility_runs WHERE project_id=? ORDER BY tested_at DESC",(pid,))
-    gsc_rows=query("SELECT * FROM gsc_rows WHERE project_id=?",(pid,))
-    gsc_df=pd.DataFrame([dict(r) for r in gsc_rows]) if gsc_rows else pd.DataFrame()
-    st.markdown('<div class="ogs-eyebrow">Organic growth workspace</div><div class="ogs-heading">Good morning, let’s grow your visibility.</div><div class="ogs-sub">Your search performance, AI visibility and next best actions — all in one place.</div>',unsafe_allow_html=True)
-    left,right=st.columns([1.2,.8],gap="large")
-    with left:
-        st.markdown(f'<div class="ogs-hero"><div class="ogs-eyebrow">Start with your website</div><h2>Find out what’s holding your website back.</h2><p>Get a guided review of technical SEO, content opportunities and AI search readiness. No SEO expertise required.</p><p style="margin-top:12px"><b>{safe_project_domain}</b></p></div>',unsafe_allow_html=True)
-        if st.button("＋ Run new audit",type="primary",use_container_width=True):
-            st.session_state["jump_page"]="Website audit"
-            st.rerun()
-    with right:
-        if audit:
-            score=int(audit["score"]); score_label=f"{score}/100"; pages_count=len(audit["pages"]); issue_count=len(audit["findings"])
-            p1=sum(1 for f in audit["findings"] if f.get("priority")=="P1")
-            st.markdown('<div class="ogs-card-title">Website health</div><div class="ogs-muted">Latest saved diagnostic · heuristic, not a Google score</div>',unsafe_allow_html=True)
-            st.metric("Diagnostic score",score_label)
-            st.progress(max(0,min(score,100))/100)
-            st.caption(f"{pages_count} pages audited · {issue_count} findings · {p1} high-priority findings")
-        else:
-            st.markdown('<div class="ogs-card-title">Website health</div><div class="ogs-muted">Your score appears after the first real crawl.</div>',unsafe_allow_html=True)
-            st.info("No audit yet. Run an audit to calculate a score from detected issues.")
-    st.markdown("### Your growth snapshot")
-    a,b,c,d=st.columns(4)
-    a.metric("Diagnostic score",f'{audit["score"]}/100' if audit else "—")
-    b.metric("Pages checked",len(audit["pages"]) if audit else 0)
-    c.metric("Issues to review",len(audit["findings"]) if audit else 0,help="Findings from the latest saved crawl")
-    d.metric("AI observations",len(vis))
-    st.markdown("### Recommended next steps")
-    steps=[]
-    if not audit: steps.append(("Run your first website audit","Check important technical SEO signals using a real crawl.","Website audit"))
-    elif audit["findings"]: steps.append(("Review your SEO findings",f'{len(audit["findings"])} findings from the latest crawl need human review.',"Website audit"))
-    if gsc_df.empty: steps.append(("Import Search Console data","Find queries and pages already earning search visibility.","Search performance"))
-    if not vis: steps.append(("Start AI visibility tracking","Test buyer prompts on AI platforms and record the actual responses.","AI visibility"))
-    steps.append(("Work through your action plan","Track fixes and verify them with a follow-up audit.","Action center"))
-    for idx,(title,desc,dest) in enumerate(steps):
-        with st.container(border=True):
-            col1,col2=st.columns([4,1])
-            col1.markdown(f'<div class="ogs-card-title">{html.escape(title)}</div><div class="ogs-muted">{html.escape(desc)}</div>',unsafe_allow_html=True)
-            if col2.button("Open →",key=f"overview_step_{idx}",use_container_width=True):
-                st.session_state["jump_page"]=dest
-                st.rerun()
-    st.caption("Only saved crawl and imported/recorded project data are shown. Diagnostic scores are heuristic and do not guarantee rankings, traffic or AI citations.")
-
-elif page=="Website audit":
-    st.markdown('<div class="ogs-eyebrow">Technical SEO</div><div class="ogs-heading">Website audit</div><div class="ogs-sub">Find technical and on-page issues, see evidence, and understand how to fix them.</div>',unsafe_allow_html=True)
-    st.write("Scan pages you own or are authorized to assess. We respect robots.txt, limit request rates and do not bypass access controls.")
-    with st.form("audit_form"):
-        audit_url=st.text_input("Website URL",value=project["domain"])
-        max_pages=st.slider("Maximum HTML pages",5,100,25,5)
-        delay=st.slider("Delay between requests (seconds)",0.5,5.0,1.0,0.5)
-        run=st.form_submit_button("Run website audit",type="primary")
-    if run:
-        with st.spinner("Crawling pages and analyzing SEO signals…"):
-            try:
-                result=crawl_site(audit_url,max_pages,delay)
-                if not result["pages"]: st.warning("No HTML pages were successfully audited. Check the URL, robots.txt and crawl notes.")
-                else:
-                    save_audit(result); st.session_state["last_result"]=result
-                    st.success(f"Audit complete: {len(result['pages'])} pages analyzed.")
-            except Exception as e: st.error(str(e))
-    audit=latest_audit(pid)
-    if audit:
-        st.divider()
-        a,b,c,d=st.columns(4)
-        a.metric("Diagnostic score",f'{audit["score"]}/100')
-        b.metric("Pages audited",len(audit["pages"]))
-        c.metric("Total findings",len(audit["findings"]))
-        d.metric("P1 findings",sum(1 for f in audit["findings"] if f["priority"]=="P1"))
-        st.caption("Heuristic score: it is not a Google metric or ranking forecast.")
-        tabs=st.tabs(["Summary","SEO findings","Page audit","Crawl notes"])
-        with tabs[0]:
-            counts=pd.Series([f["priority"] for f in audit["findings"]]).value_counts().to_dict()
-            st.write("Findings by priority",counts or "No findings")
-            st.write("Recommended workflow: validate critical pages, confirm indexing intent, fix high-impact issues, then measure with Search Console.")
-        with tabs[1]:
-            df=pd.DataFrame(audit["findings"])
-            if len(df):
-                pri=st.multiselect("Filter priority",["P1","P2","P3"],default=["P1","P2","P3"])
-                st.dataframe(df[df.priority.isin(pri)],use_container_width=True,hide_index=True)
-                report_download("Download findings CSV",df,"seo-findings.csv")
-            else: st.success("No findings generated by the current checks.")
-        with tabs[2]:
-            df=pd.DataFrame([{k:v for k,v in p.items() if k not in ("links","headers","text_excerpt")} for p in audit["pages"]])
-            st.dataframe(df,use_container_width=True,hide_index=True)
-            report_download("Download page audit CSV",df,"page-audit.csv")
-        with tabs[3]:
-            st.write("The crawler records inaccessible pages and non-HTML skips in page errors; robots.txt exclusions are not currently persisted separately in this version.")
-    else: st.info("Run an audit to populate this section.")
-
-elif page=="AI recommendations":
-    st.markdown('<div class="ogs-eyebrow">AI-assisted analysis</div><div class="ogs-heading">AI recommendations</div><div class="ogs-sub">Contextual suggestions grounded in your crawl evidence and business goals.</div>',unsafe_allow_html=True)
-    st.write("Use a language model to explain audit evidence and draft suggestions grounded in your business context.")
-    if not audit: st.warning("Run a website audit first.")
-    else:
-        business=st.text_input("Business type",value=project["business_type"] or "",placeholder="B2B SaaS")
-        target=st.text_input("Target customer",value=project["target_customer"] or "",placeholder="IT leaders at mid-market companies")
-        offer=st.text_input("Primary offer",value=project["primary_offer"] or "",placeholder="Workflow automation platform")
-        scope=st.selectbox("Analysis focus",["Prioritized SEO action plan","Content and metadata improvements","Technical SEO explanations","AI-answer readiness and content clarity"])
-        if st.button("Generate AI analysis",type="primary"):
-            with st.spinner("Analyzing audit evidence…"):
-                try:
-                    findings=audit["findings"][:40]
-                    pages=[{k:p.get(k) for k in ("url","title","description","h1","words","jsonld_types","text_excerpt")} for p in audit["pages"][:15]]
-                    prompt={"business_type":business,"target_customer":target,"primary_offer":offer,"focus":scope,"findings":findings,"pages":pages}
-                    response=openai_call("You are a careful senior technical SEO and organic growth analyst. Use only provided evidence; clearly label hypotheses. Never claim guaranteed rankings or AI citations. Prioritize by impact, confidence and effort. Return readable Markdown with: executive summary, top 5 actions (evidence, why it matters, recommended fix, validation method, confidence), content opportunities, risks/unknowns. Do not invent search volume, competitors or performance metrics.",json.dumps(prompt,ensure_ascii=False))
-                    execute("INSERT INTO ai_reports(project_id,created_at,report_type,input_hash,content) VALUES(?,?,?,?,?)",(pid,now(),scope,hashlib.sha256(json.dumps(prompt,sort_keys=True).encode()).hexdigest(),response))
-                    st.session_state["ai_response"]=response
-                except Exception as e: st.error(str(e))
-        if st.session_state.get("ai_response"):
-            st.markdown(st.session_state["ai_response"])
-            st.download_button("Download AI analysis",st.session_state["ai_response"],"ai-seo-analysis.md",mime="text/markdown")
-
-elif page=="Search performance":
-    st.markdown('<div class="ogs-eyebrow">Google Search Console</div><div class="ogs-heading">Search performance</div><div class="ogs-sub">Understand which queries and pages earn impressions and clicks.</div>',unsafe_allow_html=True)
-    st.write("Import a CSV export from Google Search Console → Performance. This import does not connect to Google automatically.")
-    with st.expander("How to export data"):
-        st.markdown("In Search Console, open **Performance → Search results**, choose a date range, export the table as CSV, then upload it below. Export query and page tables separately if you want both views.")
-    upload=st.file_uploader("Upload Search Console CSV",type=["csv"],key="gsc_upload")
-    if upload:
-        try:
-            raw=pd.read_csv(upload)
-            raw.columns=[str(x).strip().lower() for x in raw.columns]
-            aliases={"top queries":"query","top pages":"page","click-through rate":"ctr","position":"position","clicks":"clicks","impressions":"impressions","query":"query","page":"page"}
-            raw=raw.rename(columns={c:aliases[c] for c in raw.columns if c in aliases})
-            if "clicks" not in raw or "impressions" not in raw: st.error("CSV must include Clicks and Impressions columns.")
+                crawl_start=normalized; scope_prefix=(parsed.path.rstrip("/") or None) if parsed.path!="/" else None
+            existing=query("SELECT * FROM projects WHERE user_id=? AND domain=?",(uid,root))
+            if existing:
+                proj=existing[0]; project_id=proj["id"]
             else:
-                for col in ("clicks","impressions","ctr","position"):
-                    if col not in raw: raw[col]=0
-                    raw[col]=pd.to_numeric(raw[col].astype(str).str.replace("%","",regex=False),errors="coerce").fillna(0)
-                if raw["ctr"].max()>1: raw["ctr"]=raw["ctr"]/100
-                if "query" not in raw: raw["query"]=""
-                if "page" not in raw: raw["page"]=""
-                st.dataframe(raw.head(100),use_container_width=True,hide_index=True)
-                if st.button("Save imported data to project"):
-                    execute("DELETE FROM gsc_rows WHERE project_id=?",(pid,))
-                    for _,r in raw.iterrows():
-                        execute("INSERT INTO gsc_rows(project_id,imported_at,query,page,clicks,impressions,ctr,position) VALUES(?,?,?,?,?,?,?,?)",
-                          (pid,now(),str(r.get("query","")),str(r.get("page","")),float(r.clicks),float(r.impressions),float(r.ctr),float(r.position)))
-                    st.success(f"Imported {len(raw)} rows.")
-        except Exception as e: st.error(f"Could not read CSV: {e}")
-    rows=query("SELECT * FROM gsc_rows WHERE project_id=?",(pid,))
-    if rows:
-        df=pd.DataFrame([dict(r) for r in rows])
-        a,b,c=st.columns(3); a.metric("Clicks",f'{df.clicks.sum():,.0f}'); b.metric("Impressions",f'{df.impressions.sum():,.0f}'); c.metric("Weighted CTR",f'{df.clicks.sum()/df.impressions.sum():.2%}' if df.impressions.sum() else "—")
-        if df.query.astype(str).str.len().gt(0).any():
-            q=df[df["query"].astype(str).str.len()>0].groupby("query",as_index=False).agg(clicks=("clicks","sum"),impressions=("impressions","sum"),position=("position","mean"))
-            q["ctr"]=q.clicks/q.impressions.replace(0,pd.NA)
-            st.subheader("Query opportunities")
-            st.dataframe(q.sort_values(["impressions","clicks"],ascending=False),use_container_width=True,hide_index=True)
-            report_download("Export query analysis",q,"query-opportunities.csv")
-        report_download("Export imported data",df,"search-performance.csv")
-    else: st.info("No Search Console data saved yet.")
+                project_id=execute("INSERT INTO projects(user_id,name,domain,created_at) VALUES(?,?,?,?)",(uid,parsed.hostname or root,root,now()))
+            with st.status("Preparing your diagnostic…",expanded=True) as status:
+                try:
+                    st.write("**Step 1 of 2 — Site Health (SEO)**")
+                    st.write("Crawling permitted public HTML pages and collecting technical evidence…")
+                    seo=crawl_site(crawl_start,max_pages=max_pages,delay=0.5,scope_prefix=scope_prefix)
+                    seo["score"]=score_seo(seo["pages"],seo["findings"])
+                    if not seo["pages"]:
+                        raise RuntimeError("No HTML pages were successfully audited. Check the URL, robots.txt and hosting response, then try again.")
+                    st.write(f"SEO scan complete: {len(seo['pages'])} pages inspected, {len(seo['findings'])} findings.")
+                    st.write("**Step 2 of 2 — AI Search Health**")
+                    st.write("Checking robots directives, sitemap, llms.txt and content signals used for machine discovery…")
+                    ai=analyze_ai_search_health(crawl_start,seo["pages"])
+                    created=now(); save_diagnostic(project_id,scope_mode,crawl_start,seo,ai,created)
+                    st.session_state["active_report"]=(query("SELECT MAX(id) AS id FROM diagnostic_runs WHERE project_id=?",(project_id,))[0]["id"],project_id)
+                    st.session_state.pop("scan_error",None)
+                    status.update(label="Diagnostics complete",state="complete",expanded=False)
+                    st.rerun()
+                except Exception as exc:
+                    status.update(label="Diagnostic could not complete",state="error",expanded=True)
+                    st.error(str(exc))
+    report=None
 
-elif page=="AI visibility":
-    st.markdown('<div class="ogs-eyebrow">Answer engine optimization</div><div class="ogs-heading">AI visibility</div><div class="ogs-sub">Track whether your brand appears in AI answers to the buyer questions that matter.</div>',unsafe_allow_html=True)
-    st.write("Record repeatable tests in AI answer platforms. This feature stores observations you actually make; it does not automatically query ChatGPT, Gemini or Perplexity.")
-    with st.form("vis_form"):
-        tested=st.date_input("Test date",value=datetime.now().date())
-        platform=st.selectbox("Platform",["ChatGPT","Google AI Overviews","Gemini","Perplexity","Claude","Other"])
-        prompt=st.text_area("Exact buyer prompt tested",placeholder="What are the best workflow automation tools for a 200-person company?")
-        mentioned=st.selectbox("Was your brand mentioned?",["No","Yes"])
-        cited=st.text_input("Cited URL (if any)",placeholder=project["domain"])
-        competitors=st.text_input("Competitors mentioned",placeholder="Competitor A, Competitor B")
-        sentiment=st.selectbox("Brand sentiment",["Positive","Neutral","Negative","Mixed","Not applicable","Unknown"])
-        notes=st.text_area("Notes / evidence",placeholder="Paste short observation, response link or context. Avoid sensitive data.")
-        save=st.form_submit_button("Save observation",type="primary")
-    if save:
-        if not prompt.strip(): st.error("Enter the exact prompt you tested.")
+if report:
+    seo=report["seo"]; ai=report["ai"]
+    st.markdown(f'<div class="ogs-hero" style="background:linear-gradient(120deg,#fff 0%,#f1f8ed 100%);border-color:#dbe8d8"><div class="ogs-eyebrow" style="color:#315d47">DIAGNOSTIC REPORT · {html.escape(report["created_at"][:10])}</div><h2 style="margin:5px 0">{html.escape(report["scope_url"])}</h2><p>Scope: {html.escape(report["scope_mode"])} · {len(seo["pages"])} HTML pages inspected · SEO first, AI Search Health second</p></div>',unsafe_allow_html=True)
+    m1,m2,m3,m4=st.columns(4)
+    m1.metric("Site Health · SEO",f"{seo['score']}/100",help="Internal technical SEO heuristic, not a Google score.")
+    m2.metric("AI Search Health",f"{ai['score']}/100",help="Technical readiness heuristic, not a ranking or observed-mention score.")
+    m3.metric("SEO issues",len(seo["findings"]))
+    m4.metric("AI readiness actions",len(ai["findings"]))
+    tabs=st.tabs(["Executive summary","1 · Site Health (SEO)","2 · AI Search Health","Fix plan & expected gains","Crawl evidence"])
+    with tabs[0]:
+        st.markdown("### What the diagnostic says")
+        critical=sum(1 for f in seo["findings"] if f.get("priority")=="P1")
+        ai_critical=sum(1 for f in ai["findings"] if f.get("priority")=="P1")
+        if critical or ai_critical:
+            st.warning(f"Start with {critical} high-priority SEO finding(s) and {ai_critical} high-priority AI-readiness finding(s). Review each item before changing production settings.")
         else:
-            execute("INSERT INTO visibility_runs(project_id,tested_at,platform,prompt,brand_mentioned,cited_url,competitors,sentiment,notes) VALUES(?,?,?,?,?,?,?,?,?)",
-              (pid,tested.isoformat(),platform,prompt.strip(),1 if mentioned=="Yes" else 0,cited.strip(),competitors.strip(),sentiment,notes.strip()))
-            st.success("Observation saved.")
-    rows=query("SELECT * FROM visibility_runs WHERE project_id=? ORDER BY tested_at DESC",(pid,))
-    if rows:
-        df=pd.DataFrame([dict(r) for r in rows])
-        a,b,c=st.columns(3); a.metric("Tests recorded",len(df)); b.metric("Mention rate",f'{df.brand_mentioned.mean():.1%}'); c.metric("With citation",int(df.cited_url.astype(str).str.len().gt(0).sum()))
-        st.dataframe(df,use_container_width=True,hide_index=True)
-        report_download("Export AI visibility history",df,"ai-visibility-history.csv")
-        st.download_button("Download prompt tracking template",pd.DataFrame([{"platform":"ChatGPT","prompt":"What are the best [category] tools for [buyer]?"},{"platform":"Perplexity","prompt":"Compare leading [category] providers for [use case]."},{"platform":"Gemini","prompt":"Which [category] solution suits [buyer constraints]?"}]).to_csv(index=False).encode("utf-8-sig"),"ai-visibility-prompt-template.csv","text/csv")
-    else: st.info("No AI visibility observations yet. Start with 5–10 buyer prompts and rerun them on a consistent schedule.")
-
-elif page=="Competitors":
-    st.markdown('<div class="ogs-eyebrow">Competitive intelligence</div><div class="ogs-heading">Competitor insights</div><div class="ogs-sub">Compare public on-page signals against selected competitors.</div>',unsafe_allow_html=True)
-    st.write("This version can audit competitor URLs you provide and compare on-page signals. It does not provide third-party keyword volumes, backlink databases or automatic AI citation data.")
-    try: competitors=json.loads(project["competitors"] or "[]")
-    except Exception: competitors=[]
-    comptext=st.text_area("Competitor URLs (one per line)",value="\n".join([x if x.startswith("http") else "https://"+x for x in competitors]),placeholder="https://competitor.example")
-    if st.button("Audit competitor homepages"):
-        urls=[normalize_url(x) for x in comptext.splitlines() if x.strip()]
-        result=[]
-        for u in urls[:5]:
-            ok,msg=validate_public_url(u)
-            if not ok: result.append({"url":u,"error":msg}); continue
-            try:
-                f=fetch_html(u)
-                if "html" in f:
-                    p=parse_page(u,f["html"],f["status"],f.get("headers"))
-                    result.append({k:p.get(k) for k in ("url","status","title","description","h1_count","words","images","alt_missing","jsonld_types","internal_links")})
-                else: result.append({"url":u,"status":f.get("status"),"error":"Redirect or non-HTML response; inspect manually."})
-            except Exception as e: result.append({"url":u,"error":str(e)})
-        if result: st.dataframe(pd.DataFrame(result),use_container_width=True,hide_index=True)
-    st.caption("Only audit competitor sites for publicly accessible information and within applicable terms. Avoid treating homepage signals as a full competitive analysis.")
-
-elif page=="Action center":
-    st.markdown('<div class="ogs-eyebrow">Execution</div><div class="ogs-heading">Growth action plan</div><div class="ogs-sub">Turn findings into tasks, assign status and verify fixes.</div>',unsafe_allow_html=True)
-    st.write("Tasks are seeded from audit findings. Review the evidence before implementing any change.")
-    rows=query("SELECT * FROM tasks WHERE project_id=? ORDER BY CASE priority WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,created_at DESC",(pid,))
-    if rows:
-        df=pd.DataFrame([dict(r) for r in rows])
-        status_filter=st.multiselect("Filter status",["Open","In progress","Blocked","Done"],default=["Open","In progress","Blocked"])
-        shown=df[df.status.isin(status_filter)]
-        st.dataframe(shown[["priority","title","category","url","evidence","recommendation","status"]],use_container_width=True,hide_index=True)
-        with st.form("update_task"):
-            task_ids={f'{r["id"]} · {r["title"]}':r["id"] for r in rows}
-            selected=st.selectbox("Task to update",list(task_ids.keys()))
-            new_status=st.selectbox("New status",["Open","In progress","Blocked","Done"])
-            due=st.text_input("Due date (optional, YYYY-MM-DD)")
-            update=st.form_submit_button("Update task")
-        if update:
-            execute("UPDATE tasks SET status=?,due_date=? WHERE id=? AND project_id=?",(new_status,due,task_ids[selected],pid))
-            st.success("Task updated."); st.rerun()
-        report_download("Export action plan",df,"growth-action-plan.csv")
-    else: st.info("Run an audit to generate initial action items.")
-
-elif page=="Reports":
-    st.markdown('<div class="ogs-eyebrow">Reporting</div><div class="ogs-heading">Reports & history</div><div class="ogs-sub">Share clear progress and next steps with stakeholders.</div>',unsafe_allow_html=True)
-    audits=query("SELECT * FROM audits WHERE project_id=? ORDER BY created_at DESC",(pid,))
-    if audits:
-        hist=pd.DataFrame([{"date":r["created_at"],"score":r["score"],"pages":r["pages"],"findings":len(json.loads(r["findings_json"]))} for r in audits])
-        st.subheader("Audit history"); st.dataframe(hist,use_container_width=True,hide_index=True)
-        st.line_chart(hist.set_index("date")["score"])
-    else: st.info("No audit history yet.")
-    reports=query("SELECT * FROM ai_reports WHERE project_id=? ORDER BY created_at DESC",(pid,))
-    for r in reports[:10]:
-        with st.expander(f'{r["created_at"][:19]} · {r["report_type"]}'):
-            st.markdown(r["content"])
-            st.download_button("Download report",r["content"],f'ai-report-{r["id"]}.md',mime="text/markdown",key=f'report_{r["id"]}')
-
-elif page=="Settings":
-    st.title("Project settings")
-    st.write("Manage your project details and integrations.")
-    with st.form("project_settings"):
-        name=st.text_input("Project name",value=project["name"])
-        domain=st.text_input("Website URL",value=project["domain"])
-        btype=st.text_input("Business type",value=project["business_type"] or "")
-        target=st.text_input("Target customer",value=project["target_customer"] or "")
-        offer=st.text_input("Primary offer",value=project["primary_offer"] or "")
-        comp=st.text_area("Competitor domains, one per line",value="\n".join(json.loads(project["competitors"] or "[]")))
-        save=st.form_submit_button("Save project settings")
-    if save:
-        url=normalize_url(domain); ok,msg=validate_public_url(url)
-        if not ok: st.error(msg)
+            st.success("No P1 findings were produced by these checks. Review P2/P3 opportunities and validate important pages manually.")
+        a,b=st.columns(2)
+        with a:
+            st.markdown("#### Site Health")
+            st.progress(seo["score"]/100)
+            st.write(f"**{seo['score']}/100** internal heuristic")
+            st.caption("Based on detected page-level findings. This is not Google's score, a ranking prediction, or a guarantee of traffic.")
+        with b:
+            st.markdown("#### AI Search Health")
+            st.progress(ai["score"]/100)
+            st.write(f"**{ai['score']}/100** technical readiness heuristic")
+            st.caption("Measures access and content signals only. It does not prove that ChatGPT, Claude or another assistant mentions the brand.")
+        st.markdown("#### The three things to do first")
+        combined=[]
+        for f in seo["findings"]:
+            combined.append((0 if f.get("priority")=="P1" else 1 if f.get("priority")=="P2" else 2,"SEO",f))
+        for f in ai["findings"]:
+            combined.append((0 if f.get("priority")=="P1" else 1 if f.get("priority")=="P2" else 2,"AI readiness",f))
+        for _,label,f in sorted(combined,key=lambda x:x[0])[:3]:
+            with st.container(border=True):
+                st.markdown(f"**{label} · {f.get('issue','Finding')}**")
+                st.write(f.get("evidence","Evidence unavailable"))
+                st.caption(f"Fix: {f.get('fix') or f.get('recommendation','Review the page and validate the finding.')}")
+    with tabs[1]:
+        st.markdown("### Site Health checks")
+        st.caption("Technical and on-page signals from the pages actually crawled.")
+        if seo["findings"]:
+            for i,f in enumerate(sorted(seo["findings"],key=lambda x:(x.get("priority")!="P1",x.get("priority")!="P2",x.get("url","")))[:100]):
+                with st.expander(f"{f.get('priority','P3')} · {f.get('issue','SEO finding')} · {urlparse(f.get('url','')).path or '/'}",expanded=(i<3)):
+                    st.markdown(f"**Evidence**  \n{f.get('evidence','Not recorded')}")
+                    st.markdown(f"**How to fix**  \n{f.get('recommendation','Review this signal manually.')}")
+                    seo_gain,aeo_gain=seo_benefits(f)
+                    st.markdown(f"**Potential SEO benefit**  \n{seo_gain}")
+                    st.markdown(f"**Potential AEO / AI-search benefit**  \n{aeo_gain}")
+                    st.caption(f"URL: {f.get('url','')} · Benefits depend on validation and implementation; no ranking or citation is guaranteed.")
+        else: st.success("No issues were detected by the current SEO checks. This does not mean the site is issue-free.")
+    with tabs[2]:
+        st.markdown("### AI Search Health")
+        st.write("We check technical accessibility and answer-ready content signals that can influence whether public information is available to AI-enabled search systems. This is not a live query of model responses.")
+        signals=ai.get("signals",{})
+        if signals:
+            cols=st.columns(4)
+            for col,(label,value) in zip(cols,[("robots.txt",signals.get("robots_txt","Not checked")),("XML sitemap",signals.get("sitemap","Not checked")),("llms.txt",signals.get("llms_txt","Not checked")),("Pages reviewed",str(signals.get("pages_reviewed",len(seo["pages"]))))]):
+                col.markdown(f"<div class='ogs-step'><div class='ogs-muted'>{html.escape(label)}</div><div style='font-size:15px;font-weight:800;color:#234c36;margin-top:6px'>{html.escape(str(value))}</div></div>",unsafe_allow_html=True)
+        st.markdown("#### AI discovery ecosystems · robots.txt signals")
+        platform_rows=ai.get("platforms",[])
+        if platform_rows:
+            st.dataframe(pd.DataFrame(platform_rows),use_container_width=True,hide_index=True)
         else:
-            execute("UPDATE projects SET name=?,domain=?,business_type=?,target_customer=?,primary_offer=?,competitors=? WHERE id=? AND user_id=?",
-             (name.strip(),url,btype,target,offer,json.dumps([x.strip() for x in comp.splitlines() if x.strip()]),pid,uid))
-            st.success("Project updated."); st.rerun()
-    st.divider()
-    st.subheader("AI integration")
-    if st.secrets.get("OPENAI_API_KEY",os.getenv("OPENAI_API_KEY","")):
-        st.success("OpenAI API key detected. AI usage may incur separate charges.")
-    else:
-        st.warning("OpenAI API key not detected. Add OPENAI_API_KEY to Streamlit Secrets to enable AI recommendations.")
-        st.code('OPENAI_API_KEY = "your-api-key"\nOPENAI_MODEL = "gpt-4.1-mini"',language="toml")
-    st.subheader("Subscription and billing")
-    st.info("Billing UI is not a payment processor. Configure Stripe checkout, webhooks, pricing and tax/legal policies before charging customers. This build does not activate paid subscriptions.")
-    sub=query("SELECT * FROM subscriptions WHERE user_id=?",(uid,))
-    if sub: st.write(f'Plan: **{sub[0]["plan"]}** · Status: {sub[0]["status"]}')
-    st.subheader("Hosting and data")
-    st.warning("Streamlit Community Cloud local files may not be durable across restarts/redeploys. For real multi-client commercial use, move SQLite to managed PostgreSQL, add email verification/password reset, rate limits, backups, audit logs and secure account recovery.")
-    st.caption("Scheduled scans and email notifications require a persistent worker/scheduler and configured mail provider; they are not run automatically by this Streamlit app.")
+            st.info("This saved report predates platform-level checks. Run a new diagnostic to refresh the signals.")
+        st.caption(ai.get("disclaimer","Technical readiness is not proof of inclusion in generated answers."))
+        for f in ai["findings"]:
+            with st.expander(f"{f.get('priority','P3')} · {f.get('issue','AI readiness finding')}"):
+                st.markdown(f"**Evidence**  \n{f.get('evidence','Not recorded')}")
+                st.markdown(f"**How to fix**  \n{f.get('fix','Review the signal manually.')}")
+                st.markdown(f"**SEO benefit**  \n{f.get('seo_benefit','Can clarify discovery or content interpretation where applicable.')}")
+                st.markdown(f"**AEO / AI-search benefit**  \n{f.get('aeo_benefit','May improve accessibility or interpretation; citations are not guaranteed.')}")
+                st.markdown(f"**Expected gain**  \n{f.get('expected_gain','Potential benefit depends on implementation and platform behavior.')}")
+    with tabs[3]:
+        st.markdown("### Fix plan: issue → fix → expected benefit")
+        st.caption("Expected gains describe plausible mechanisms, not guaranteed ranking increases, traffic, leads or AI citations.")
+        action_rows=[]
+        for f in seo["findings"]:
+            seo_gain,aeo_gain=seo_benefits(f)
+            action_rows.append({"Workstream":"SEO","Priority":f.get("priority"),"Issue":f.get("issue"),"Affected URL":f.get("url"),"Evidence":f.get("evidence"),"How to fix":f.get("recommendation"),"Potential SEO gain":seo_gain,"Potential AEO gain":aeo_gain,"Confidence":f.get("confidence","Medium")})
+        for f in ai["findings"]:
+            action_rows.append({"Workstream":"AI Search","Priority":f.get("priority"),"Issue":f.get("issue"),"Affected URL":report.get("scope_url"),"Evidence":f.get("evidence"),"How to fix":f.get("fix"),"Potential SEO gain":f.get("seo_benefit"),"Potential AEO gain":f.get("aeo_benefit"),"Confidence":f.get("confidence","Medium")})
+        if action_rows:
+            order={"P1":0,"P2":1,"P3":2}
+            action_rows.sort(key=lambda x:order.get(x["Priority"],3))
+            st.dataframe(pd.DataFrame(action_rows),use_container_width=True,hide_index=True)
+            st.download_button("Download complete fix plan (CSV)",pd.DataFrame(action_rows).to_csv(index=False).encode("utf-8-sig"),"organic-growth-fix-plan.csv","text/csv",type="primary")
+        else: st.success("No fix-plan items were generated by this run.")
+    with tabs[4]:
+        st.markdown("### Crawl evidence")
+        page_rows=[]
+        for p in seo["pages"]:
+            page_rows.append({k:p.get(k) for k in ["url","status","title","description","h1_count","canonical","noindex","images","alt_missing","words","internal_links","external_links","jsonld_types"]})
+        st.dataframe(pd.DataFrame(page_rows),use_container_width=True,hide_index=True)
+        st.download_button("Download page-level evidence (CSV)",pd.DataFrame(page_rows).to_csv(index=False).encode("utf-8-sig"),"site-health-page-evidence.csv","text/csv")
+        if seo.get("notes"):
+            st.markdown("#### Crawl notes")
+            for note in seo["notes"]: st.write("• "+note)
+    st.markdown('<div class="ogs-footer-note">Organic Growth Studio measures observed technical signals. Scores are internal heuristics; platform visibility, rankings and traffic are not guaranteed.</div>',unsafe_allow_html=True)
+
+st.markdown("---")
+st.caption("Organic Growth Studio · A guided SEO + AI-search readiness diagnostic. Direct AI-answer visibility measurement and scheduled refreshes are not yet automated in this build.")

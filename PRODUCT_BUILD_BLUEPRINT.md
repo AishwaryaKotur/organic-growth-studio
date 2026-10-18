@@ -77,9 +77,9 @@ This is an original implementation informed by common feature categories in the 
 - Error monitoring, abuse prevention, secrets management, privacy policy, terms, DPA where needed, and security review.
 
 ## Current included prototype — honest status
-The included `app.py` is a functional Streamlit prototype with basic account registration, projects, limited HTML crawling, heuristic SEO findings, optional OpenAI recommendations, Search Console CSV import, manual AI visibility observations, public competitor homepage checks, action tracking, audit history, and exports.
+The current guided build focuses the post-login experience on one flow: URL entry, crawl scope, Site Health (SEO), AI Search Health technical readiness, and an evidence-backed fix plan. It includes basic account registration, bounded same-origin HTML crawling, heuristic SEO findings, root-path robots/sitemap/llms checks, parsed robots directives for ten AI/search ecosystems, report history, and CSV exports.
 
-It is NOT yet a production-ready commercial SaaS. In particular, automatic AI-platform tracking, direct Google OAuth/API connection, licensed keyword/backlink data, Stripe billing, background scheduling, robust authentication, and durable managed storage are not implemented. The HTML preview is a visual mockup; its demo metrics are illustrative and its buttons do not call the backend.
+It is NOT yet a production-ready commercial SaaS. It does not automatically query AI assistants, directly measure brand mentions/citations across models, run scheduled refreshes, connect to Google OAuth/Search Console API, access licensed keyword/backlink data, process Stripe billing, or use durable managed storage. The HTML preview is a standalone interactive design preview; its sample report is labelled illustrative and does not call the diagnostic backend.
 
 ## Recommended delivery gates (before public launch)
 - Gate A: UX test with 5 non-SEO users; at least 4 can complete project setup and interpret one issue without help.
