@@ -1,23 +1,31 @@
-# Organic Growth Studio — V1.1 (SEO + AEO)
+# Organic Growth Studio — V1.3 (SEO + AI SEO Recommendations)
 
-Local-first starter product for authorized SEO audits and structured AEO readiness reviews.
+A Streamlit starter product for authorized website audits. V1.3 adds optional AI-assisted recommendations grounded in crawler findings and user-provided business context.
 
 ## Features
-- Crawls a configurable number of same-origin HTML pages, checks robots.txt and uses a conservative request delay.
-- Checks HTTP status, title, meta description, H1, canonical, noindex, image alt attributes, rough text volume, JSON-LD presence and internal/external link counts.
-- Creates prioritized SEO findings.
-- Includes an AEO readiness checklist covering crawler access, entity clarity, answer-ready content, source transparency, structured data, third-party corroboration, buyer-prompt baselines and conversion paths.
-- Exports an Excel workbook with Summary, Page Audit, SEO Findings and AEO Checklist sheets.
+- Crawls a configurable number of same-origin HTML pages, checks robots.txt, and uses a configurable delay.
+- Normalizes common tracking parameters while preserving other query parameters.
+- Checks HTTP status, titles, meta descriptions, H1, canonical, noindex, image alt attributes, rough text volume, JSON-LD presence, and internal/external link counts.
+- Findings include evidence, recommended action, why it matters, potential impact, effort, and confidence.
+- Optional AI recommendations: context-aware explanations, fixes, draft metadata/content examples and verification steps. The model receives selected page metadata and up to 25 findings, not the full page HTML.
+- Exports the existing audit workbook and allows AI recommendations to be downloaded as CSV.
+- AEO readiness remains a manual checklist; this version does not query AI answer engines or verify citations.
 
 ## Run locally
-Requires Python 3.10+ and internet access on the machine running the audit.
-1. Unzip the package.
-2. In a terminal, open the extracted folder.
-3. Run `pip install -r requirements.txt`
-4. Run `streamlit run app.py`
-5. Open the local URL shown in the terminal.
+Requires Python 3.10+ and internet access.
+1. Unzip the package and open a terminal in the folder.
+2. Run `pip install -r requirements.txt`.
+3. Run `streamlit run app.py`.
+4. Open the local URL shown in the terminal.
+
+## Configure AI
+Set `OPENAI_API_KEY` in your environment or in Streamlit Community Cloud → App settings → Secrets, for example:
+
+```toml
+OPENAI_API_KEY = "your-api-key-here"
+```
+
+Never commit a real API key to GitHub or put it in source code. OpenAI API usage is billed separately from ChatGPT subscriptions. AI recommendations are optional; the audit works without a key. Model output may be wrong, so review every recommendation before implementation. The app sends the target website URL, user-entered business context, selected page metadata and up to 25 audit findings to the configured API. Do not send confidential or personal data.
 
 ## Limitations
-AEO readiness is a manual checklist. This version does not automatically query AI answer engines or verify citations. It also lacks JavaScript rendering, Search Console/GA4 integrations, backlink analysis, field Core Web Vitals, and keyword clustering. The diagnostic score is a heuristic, not a Google metric or ranking predictor.
-
-Audit only sites you own or are authorized to assess. Do not bypass access controls, robots directives or rate limits. Validate findings before implementation; never promise rankings, AI citations, traffic or revenue. Use least-privilege access and never put passwords/API secrets in reports.
+No JavaScript rendering, Search Console/GA4 integration, backlink analysis, field Core Web Vitals, or automated AI-answer/citation monitoring. The diagnostic score is a triage heuristic only. Crawling is limited to fetched HTML pages. Audit only sites you own or are authorized to assess; respect robots directives and rate limits. Never promise rankings, AI citations, traffic or revenue.
