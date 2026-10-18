@@ -269,7 +269,7 @@ if "audit" in st.session_state:
     c1,c2,c3,c4=st.columns(4);c1.metric("Pages audited",len(pages));c2.metric("Diagnostic score",f"{score(pages)}/100")
     c3.metric("P1 findings",int((fdf.Priority=="P1").sum()) if not fdf.empty else 0);c4.metric("Total findings",len(fdf))
     st.info("Human review required. Confirm business impact, page intent and whether directives are intentional before changing a live site. Priorities and confidence are heuristics, not search-engine judgments.")
-    t1,t2,t3,t4,t5,t6=st.tabs(["Summary","SEO findings","Page audit","AEO readiness","AI recommendations","Crawl notes"])
+    t1,t2,t3,t4,t5,t6,t7,t8=st.tabs(["Summary","SEO findings","Page audit","AEO readiness","AI recommendations","Search performance","AI visibility","Crawl notes"])
     with t1:
         st.dataframe(a["summary"],use_container_width=True,hide_index=True)
         st.markdown("**Recommended workflow**");st.write("Validate P1 findings on business-critical pages, confirm indexing intent, fix high-impact issues first, then measure outcomes with Search Console and analytics.")
@@ -314,11 +314,89 @@ if "audit" in st.session_state:
             st.download_button("Download AI recommendations (.csv)", data=a["ai_recommendations"].to_csv(index=False).encode("utf-8-sig"), file_name="organic_growth_ai_recommendations.csv", mime="text/csv")
         st.info("AI suggestions may be incorrect or incomplete. They are drafts, not implementation instructions. Do not send credentials, personal data or confidential customer information to the model.")
     with t6:
+        st.markdown("### Google Search Console performance")
+        st.write("Import a CSV exported from Google Search Console Performance. This version analyzes uploaded data; it does not connect to your Google account directly.")
+        st.markdown("**How to export:** Search Console → Performance → Search results → choose a date range → Export → CSV. You can upload query or page reports.")
+        gsc_file = st.file_uploader("Upload Search Console CSV", type=["csv"], key="gsc_upload")
+        if gsc_file is not None:
+            try:
+                gsc = pd.read_csv(gsc_file)
+                # Normalize common Search Console export headers.
+                rename = {}
+                for col in gsc.columns:
+                    key = str(col).strip().lower()
+                    if key in ["top queries", "query", "queries"]: rename[col] = "Query"
+                    elif key in ["top pages", "page", "pages"]: rename[col] = "Page"
+                    elif key == "clicks": rename[col] = "Clicks"
+                    elif key == "impressions": rename[col] = "Impressions"
+                    elif key in ["ctr", "click through rate"]: rename[col] = "CTR"
+                    elif key in ["position", "average position"]: rename[col] = "Position"
+                gsc = gsc.rename(columns=rename)
+                required = {"Clicks", "Impressions"}
+                if not required.issubset(set(gsc.columns)):
+                    st.error("Could not identify Clicks and Impressions columns. Upload the standard Search Console Performance CSV export, not the multi-tab bulk export.")
+                else:
+                    for col in ["Clicks", "Impressions"]:
+                        gsc[col] = pd.to_numeric(gsc[col].astype(str).str.replace(",", ""), errors="coerce").fillna(0)
+                    if "CTR" in gsc.columns:
+                        gsc["CTR"] = gsc["CTR"].astype(str).str.replace("%", "", regex=False)
+                        gsc["CTR"] = pd.to_numeric(gsc["CTR"], errors="coerce")
+                        # GSC CSV often provides CTR as a percent such as 2.5%.
+                        gsc.loc[gsc["CTR"] > 1, "CTR"] = gsc.loc[gsc["CTR"] > 1, "CTR"] / 100
+                    else:
+                        gsc["CTR"] = gsc["Clicks"] / gsc["Impressions"].replace(0, pd.NA)
+                    if "Position" in gsc.columns:
+                        gsc["Position"] = pd.to_numeric(gsc["Position"], errors="coerce")
+                    m1,m2,m3 = st.columns(3)
+                    m1.metric("Clicks", f"{int(gsc['Clicks'].sum()):,}")
+                    m2.metric("Impressions", f"{int(gsc['Impressions'].sum()):,}")
+                    m3.metric("Weighted CTR", f"{(gsc['Clicks'].sum()/gsc['Impressions'].sum()*100):.2f}%" if gsc["Impressions"].sum() else "—")
+                    st.dataframe(gsc, use_container_width=True, hide_index=True)
+                    if "Query" in gsc.columns:
+                        st.markdown("**High-impression, lower-CTR query opportunities**")
+                        opp = gsc.sort_values(["Impressions","CTR"], ascending=[False,True]).head(20)
+                        st.dataframe(opp, use_container_width=True, hide_index=True)
+                    st.download_button("Download normalized Search Console data", gsc.to_csv(index=False).encode("utf-8-sig"), "search_console_analysis.csv", "text/csv")
+            except Exception as e:
+                st.error(f"Could not read this CSV: {e}")
+        st.info("Search Console data is user-provided and reflects the selected property and date range. Compare equivalent date ranges; CTR and position vary by query, device, country and search appearance.")
+    with t7:
+        st.markdown("### AI search visibility tracker")
+        st.write("Record what selected AI answer engines say when you test the same buyer questions. This is a manual measurement workflow, not automatic querying of ChatGPT, Gemini, Perplexity or other platforms.")
+        st.markdown("**Suggested process:** choose buyer questions, run them in each platform, record the exact result and cited URLs, then repeat monthly using the same prompts.")
+        vis_template = pd.DataFrame([
+            {"Date":"","Platform":"ChatGPT","Prompt":"What are the best [category] tools for [audience/use case]?","Brand mentioned":"No","Cited URL":"","Competitors mentioned":"","Notes":""},
+            {"Date":"","Platform":"Perplexity","Prompt":"Compare [brand] with alternatives for [use case].","Brand mentioned":"No","Cited URL":"","Competitors mentioned":"","Notes":""},
+            {"Date":"","Platform":"Gemini","Prompt":"How can a company solve [problem] and what solutions are available?","Brand mentioned":"No","Cited URL":"","Competitors mentioned":"","Notes":""},
+        ])
+        st.download_button("Download AI visibility tracking template (.csv)", vis_template.to_csv(index=False).encode("utf-8-sig"), "ai_visibility_tracking_template.csv", "text/csv")
+        vis_file = st.file_uploader("Upload completed AI visibility tracking CSV", type=["csv"], key="visibility_upload")
+        if vis_file is not None:
+            try:
+                vis = pd.read_csv(vis_file)
+                st.dataframe(vis, use_container_width=True, hide_index=True)
+                colmap = {str(c).strip().lower(): c for c in vis.columns}
+                brand_col = next((colmap[k] for k in ["brand mentioned","brand mentioned?","brand appeared"] if k in colmap), None)
+                platform_col = next((colmap[k] for k in ["platform","ai platform","engine"] if k in colmap), None)
+                if brand_col:
+                    yes = vis[brand_col].astype(str).str.strip().str.lower().isin(["yes","y","true","1"])
+                    st.metric("Brand mention rate", f"{yes.mean()*100:.1f}%" if len(vis) else "—")
+                    if platform_col:
+                        platform_summary = vis.assign(_Mention=yes).groupby(platform_col, dropna=False).agg(Tests=("_Mention","size"), Mentions=("_Mention","sum")).reset_index()
+                        platform_summary["Mention rate"] = (platform_summary["Mentions"] / platform_summary["Tests"] * 100).round(1).astype(str) + "%"
+                        st.dataframe(platform_summary, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("For mention-rate calculations, include a 'Brand mentioned' column with Yes/No values.")
+                st.download_button("Download AI visibility data", vis.to_csv(index=False).encode("utf-8-sig"), "ai_visibility_results.csv", "text/csv")
+            except Exception as e:
+                st.error(f"Could not read this CSV: {e}")
+        st.caption("AI answers can vary by prompt, date, location, account and model version. Treat this as directional tracking, record the exact prompt and source URLs, and do not claim comprehensive coverage.")
+    with t8:
         st.write("Robots.txt-disallowed URLs skipped:",len(a["skips"]))
         if not a["skips"].empty:st.dataframe(a["skips"],use_container_width=True,hide_index=True)
         st.write("Fetch errors / skipped resources:",len(a["errors"]))
         if not a["errors"].empty:st.dataframe(a["errors"],use_container_width=True,hide_index=True)
-        st.caption("Not included yet: JS rendering, Search Console/GA4, backlinks, field Core Web Vitals, keyword clustering, automated AI-answer monitoring or citation verification. AI recommendations are optional and require your own API key; model usage is billed separately.")
+        st.caption("Not included yet: JS rendering, direct Search Console OAuth/API connection, GA4, backlinks, field Core Web Vitals, automated AI-platform querying or independent citation verification. AI recommendations are optional and require your own API key; model usage is billed separately.")
     st.download_button("Download audit report (.xlsx)",data=excel(pages,fdf,a["summary"],a["aeo"]),file_name="organic_growth_audit.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",type="primary")
 else:
     c1,c2,c3=st.columns(3)
