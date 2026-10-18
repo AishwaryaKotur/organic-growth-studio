@@ -8,8 +8,8 @@ import streamlit as st
 from bs4 import BeautifulSoup
 
 APP="Organic Growth Studio"
-VERSION="1.3"
-UA="OrganicGrowthStudioAudit/1.3 (+authorized SEO audit; respects robots.txt)"
+VERSION="2.0"
+UA="OrganicGrowthStudioAudit/2.0 (+authorized SEO audit; respects robots.txt)"
 TIMEOUT=12
 st.set_page_config(page_title=f"{APP} v{VERSION}",page_icon="↗",layout="wide")
 
@@ -43,24 +43,58 @@ def robots_for(origin):
     except Exception: rp.parse(["User-agent: *","Disallow: /"])
     return rp
 def fetch(u):
-    ok,msg=valid(u)
-    if not ok:return None,msg
+    """Fetch a public URL while validating every redirect target before requesting it."""
+    current = norm(u)
+    if not current:
+        return None, "Invalid URL."
+    response = None
     try:
-        r=requests.get(u,headers={"User-Agent":UA},timeout=TIMEOUT,allow_redirects=True,stream=True)
-        final=norm(r.url)
-        if not final or not valid(final)[0]: r.close(); return None,"Unsafe/unsupported redirect target."
-        ctype=r.headers.get("Content-Type","").lower(); status=r.status_code; headers=dict(r.headers)
-        if "text/html" not in ctype and "application/xhtml+xml" not in ctype:
-            r.close(); return {"status":status,"url":final,"headers":headers,"html":"","type":ctype},None
-        chunks=[]; total=0
-        for ch in r.iter_content(16384):
-            if not ch: continue
-            total+=len(ch)
-            if total>2_000_000: break
-            chunks.append(ch)
-        r.close()
-        return {"status":status,"url":final,"headers":headers,"html":b"".join(chunks).decode(r.encoding or "utf-8",errors="replace"),"type":ctype},None
-    except requests.RequestException as e:return None,"Request failed: "+type(e).__name__
+        for hop in range(6):
+            ok, msg = valid(current)
+            if not ok:
+                return None, "Unsafe redirect target blocked."
+            response = requests.get(current, headers={"User-Agent": UA}, timeout=TIMEOUT,
+                                    allow_redirects=False, stream=True)
+            if response.is_redirect or response.is_permanent_redirect:
+                location = response.headers.get("Location")
+                response.close()
+                if not location:
+                    return None, "Redirect response did not include a Location header."
+                if hop >= 5:
+                    return None, "Too many redirects."
+                next_url = norm(urljoin(current, location))
+                if not next_url:
+                    return None, "Unsupported or unsafe redirect target."
+                current = next_url
+                continue
+            final = norm(response.url)
+            if not final or not valid(final)[0]:
+                response.close()
+                return None, "Unsafe/unsupported target blocked."
+            ctype = response.headers.get("Content-Type", "").lower()
+            status = response.status_code
+            headers = dict(response.headers)
+            if "text/html" not in ctype and "application/xhtml+xml" not in ctype:
+                response.close()
+                return {"status": status, "url": final, "headers": headers, "html": "", "type": ctype}, None
+            chunks, total = [], 0
+            for ch in response.iter_content(16384):
+                if not ch:
+                    continue
+                total += len(ch)
+                if total > 2_000_000:
+                    break
+                chunks.append(ch)
+            encoding = response.encoding or "utf-8"
+            response.close()
+            return {"status": status, "url": final, "headers": headers,
+                    "html": b"".join(chunks).decode(encoding, errors="replace"), "type": ctype}, None
+        return None, "Too many redirects."
+    except requests.RequestException as e:
+        if response is not None:
+            response.close()
+        return None, "Request failed: " + type(e).__name__
+
 def same(a,b):
     x,y=urlparse(a),urlparse(b); return x.scheme==y.scheme and x.netloc.lower()==y.netloc.lower()
 def parse_page(requested,res):
@@ -201,7 +235,7 @@ def generate_ai_recommendations(site, business_type, audience, offer, findings_d
     if not out: raise RuntimeError("The model response could not be converted into recommendations.")
     return pd.DataFrame(out, columns=cols)
 
-st.markdown("""<style>.block-container{padding-top:1.5rem;max-width:1400px}.hero{padding:1.4rem;border:1px solid rgba(120,120,120,.3);border-radius:18px;margin-bottom:1rem}.eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:.72rem;opacity:.7;font-weight:700}</style><div class="hero"><div class="eyebrow">SEO · AEO · Organic growth</div><h1 style="margin:.35rem 0">Organic Growth Studio</h1><p style="font-size:1.08rem;margin:0">Improve traditional search visibility, answer-engine readiness, and the path from discovery to qualified leads.</p></div>""",unsafe_allow_html=True)
+st.markdown("""<style>.block-container{padding-top:1.5rem;max-width:1400px}.hero{padding:1.4rem;border:1px solid rgba(120,120,120,.3);border-radius:18px;margin-bottom:1rem}.eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:.72rem;opacity:.7;font-weight:700}</style><div class="hero"><div class="eyebrow">SEO · AEO · Organic growth</div><h1 style="margin:.35rem 0">Organic Growth Studio</h1><p style="font-size:1.08rem;margin:0">One workspace for technical SEO, AI-assisted recommendations, search performance, AI visibility, and a prioritized growth action plan.</p></div>""",unsafe_allow_html=True)
 with st.sidebar:
     st.header("Audit settings")
     site=st.text_input("Website URL",placeholder="https://example.com")
@@ -215,7 +249,7 @@ with st.sidebar:
     audience = st.text_input("Target customer", placeholder="e.g. operations leaders at 50–500 person companies")
     offer = st.text_input("Primary offer", placeholder="e.g. project management platform")
     st.caption("AI is optional. Configure OPENAI_API_KEY in Streamlit → App settings → Secrets. The key is not included in reports.")
-st.markdown(f"### AI-assisted audit release · V{VERSION}")
+st.markdown(f"### Organic growth workspace · V{VERSION}")
 st.write("Crawls a limited number of same-site HTML pages, checks common SEO signals, and exports an Excel report. When configured with an OpenAI API key, it can draft context-aware recommendations from the audit evidence. Human review remains required; AI output is not a ranking or citation predictor.")
 if run:
     u=norm(site if site.startswith(("http://","https://")) else "https://"+site)
@@ -269,19 +303,36 @@ if "audit" in st.session_state:
     c1,c2,c3,c4=st.columns(4);c1.metric("Pages audited",len(pages));c2.metric("Diagnostic score",f"{score(pages)}/100")
     c3.metric("P1 findings",int((fdf.Priority=="P1").sum()) if not fdf.empty else 0);c4.metric("Total findings",len(fdf))
     st.info("Human review required. Confirm business impact, page intent and whether directives are intentional before changing a live site. Priorities and confidence are heuristics, not search-engine judgments.")
-    t1,t2,t3,t4,t5,t6,t7,t8=st.tabs(["Summary","SEO findings","Page audit","AEO readiness","AI recommendations","Search performance","AI visibility","Crawl notes"])
+    t1,t2,t3,t4,t5,t6,t7,t8,t9=st.tabs(["Overview","Action center","SEO findings","Page audit","AEO readiness","AI recommendations","Search performance","AI visibility","Crawl notes"])
     with t1:
         st.dataframe(a["summary"],use_container_width=True,hide_index=True)
         st.markdown("**Recommended workflow**");st.write("Validate P1 findings on business-critical pages, confirm indexing intent, fix high-impact issues first, then measure outcomes with Search Console and analytics.")
         st.caption("Score method: starts each page at 100 and applies documented deductions for missing title, missing description, missing H1, noindex, HTTP errors and missing alt attributes. It is a triage aid, not a ranking forecast.")
         if not fdf.empty:st.dataframe(fdf.head(12),use_container_width=True,hide_index=True)
     with t2:
+        st.markdown("### Prioritized growth action plan")
+        st.write("Turn audit findings into a reviewable work queue. Priorities are rule-based triage signals; confirm page intent and business impact before implementation.")
+        if fdf.empty:
+            st.success("No findings triggered by the current checks. Review important pages manually and connect performance data for a fuller picture.")
+        else:
+            plan = fdf.copy()
+            plan["Status"] = "Not started"
+            plan["Suggested next step"] = plan["Recommended Action"]
+            plan = plan.rename(columns={"URL":"Page", "Issue":"Finding"})
+            preferred = [c for c in ["Priority", "Status", "Page", "Finding", "Evidence", "Why It Matters", "Suggested next step", "Effort", "Confidence"] if c in plan.columns]
+            editable = st.data_editor(plan[preferred], use_container_width=True, hide_index=True,
+                column_config={"Status": st.column_config.SelectboxColumn("Status", options=["Not started", "In progress", "Blocked", "Done", "Not applicable"], required=True)},
+                disabled=[c for c in preferred if c != "Status"], key="action_plan_editor")
+            st.download_button("Download action plan (.csv)", editable.to_csv(index=False).encode("utf-8-sig"), "organic_growth_action_plan.csv", "text/csv")
+            done = int(editable["Status"].isin(["Done", "Not applicable"]).sum())
+            st.caption(f"Progress in this session: {done} of {len(editable)} items marked done or not applicable. Export to preserve the plan; this version does not yet store tasks in a database.")
+    with t3:
         if fdf.empty:st.success("No findings triggered by these checks. This does not mean the site is fully optimized.")
         else:
             priorities=st.multiselect("Priority filter",["P1","P2","P3"],default=["P1","P2","P3"])
             st.dataframe(fdf[fdf.Priority.isin(priorities)],use_container_width=True,hide_index=True)
-    with t3:st.dataframe(pages.drop(columns=["_links"],errors="ignore"),use_container_width=True,hide_index=True)
-    with t4:
+    with t4:st.dataframe(pages.drop(columns=["_links"],errors="ignore"),use_container_width=True,hide_index=True)
+    with t5:
         st.markdown("### AEO readiness checklist")
         st.write("Use this checklist to assess whether the business is easy for answer engines to understand and reference. It is not an automated measurement of AI citations.")
         st.dataframe(a["aeo"],use_container_width=True,hide_index=True)
@@ -292,7 +343,7 @@ if "audit" in st.session_state:
         st.write("- Compare [brand] with [competitor] for [specific use case].")
         st.write("- What should a buyer look for when choosing a [category] provider?")
         st.write("- How can a company solve [problem] and what solutions are available?")
-    with t5:
+    with t6:
         st.markdown("### AI-assisted recommendations")
         st.write("Generate tailored explanations and draft fixes using the actual audit findings plus the business context entered in the sidebar. The API call sends selected page metadata and up to 25 findings to the configured provider. Review all output before implementation.")
         model = st.selectbox("AI model", ["gpt-4.1-mini", "gpt-4.1"], index=0, help="API usage is billed separately by the model provider.")
@@ -313,7 +364,7 @@ if "audit" in st.session_state:
             st.dataframe(a["ai_recommendations"], use_container_width=True, hide_index=True)
             st.download_button("Download AI recommendations (.csv)", data=a["ai_recommendations"].to_csv(index=False).encode("utf-8-sig"), file_name="organic_growth_ai_recommendations.csv", mime="text/csv")
         st.info("AI suggestions may be incorrect or incomplete. They are drafts, not implementation instructions. Do not send credentials, personal data or confidential customer information to the model.")
-    with t6:
+    with t7:
         st.markdown("### Google Search Console performance")
         st.write("Import a CSV exported from Google Search Console Performance. This version analyzes uploaded data; it does not connect to your Google account directly.")
         st.markdown("**How to export:** Search Console → Performance → Search results → choose a date range → Export → CSV. You can upload query or page reports.")
@@ -360,7 +411,7 @@ if "audit" in st.session_state:
             except Exception as e:
                 st.error(f"Could not read this CSV: {e}")
         st.info("Search Console data is user-provided and reflects the selected property and date range. Compare equivalent date ranges; CTR and position vary by query, device, country and search appearance.")
-    with t7:
+    with t8:
         st.markdown("### AI search visibility tracker")
         st.write("Record what selected AI answer engines say when you test the same buyer questions. This is a manual measurement workflow, not automatic querying of ChatGPT, Gemini, Perplexity or other platforms.")
         st.markdown("**Suggested process:** choose buyer questions, run them in each platform, record the exact result and cited URLs, then repeat monthly using the same prompts.")
@@ -391,7 +442,7 @@ if "audit" in st.session_state:
             except Exception as e:
                 st.error(f"Could not read this CSV: {e}")
         st.caption("AI answers can vary by prompt, date, location, account and model version. Treat this as directional tracking, record the exact prompt and source URLs, and do not claim comprehensive coverage.")
-    with t8:
+    with t9:
         st.write("Robots.txt-disallowed URLs skipped:",len(a["skips"]))
         if not a["skips"].empty:st.dataframe(a["skips"],use_container_width=True,hide_index=True)
         st.write("Fetch errors / skipped resources:",len(a["errors"]))

@@ -1,44 +1,44 @@
-# Organic Growth Studio — V1.3 (SEO + AI SEO Recommendations)
+# Organic Growth Studio V2.0 — Organic Growth Workspace
 
-A Streamlit starter product for authorized website audits. V1.3 adds optional AI-assisted recommendations grounded in crawler findings and user-provided business context.
+A Streamlit application for authorized website audits and an SEO + AEO workflow. V2.0 consolidates the existing audit, optional AI recommendations, Search Console CSV analysis and manual AI visibility tracking, and adds an editable action center.
 
-## Features
-- Crawls a configurable number of same-origin HTML pages, checks robots.txt, and uses a configurable delay.
-- Normalizes common tracking parameters while preserving other query parameters.
-- Checks HTTP status, titles, meta descriptions, H1, canonical, noindex, image alt attributes, rough text volume, JSON-LD presence, and internal/external link counts.
-- Findings include evidence, recommended action, why it matters, potential impact, effort, and confidence.
-- Optional AI recommendations: context-aware explanations, fixes, draft metadata/content examples and verification steps. The model receives selected page metadata and up to 25 findings, not the full page HTML.
-- Exports the existing audit workbook and allows AI recommendations to be downloaded as CSV.
-- AEO readiness remains a manual checklist; this version does not query AI answer engines or verify citations.
+## What's included
+
+- **Technical SEO audit:** crawls a capped number of same-origin HTML pages; checks robots.txt, uses a configurable delay, and reports HTTP status, title, meta description, H1, canonical, noindex, image alt attributes, rough text volume, JSON-LD presence and internal/external links.
+- **Safer URL fetching:** normalizes common tracking parameters, preserves other query parameters, blocks private/local targets, and validates redirect destinations before requesting them.
+- **Evidence-based findings:** includes evidence, recommended action, why it may matter, effort and confidence; severity remains a triage heuristic and requires human review.
+- **Action Center:** editable status field for each finding, exportable as CSV. Task status is session-only; export the CSV to preserve it. No persistent database is included.
+- **Optional AI recommendations:** uses OpenAI API to draft context-aware explanations and proposed fixes from selected audit evidence and business context. Configure `OPENAI_API_KEY`; AI remains optional.
+- **Search performance:** import a standard Google Search Console Performance CSV and inspect clicks, impressions, CTR, average position and query opportunities where columns are available. This is CSV import, not a direct Google OAuth/API connection.
+- **AI visibility tracking:** download a template, manually run fixed buyer prompts on selected AI platforms, record mentions/citations/competitors, then upload results for mention-rate summaries. This does not automatically query AI platforms.
+- **Exports:** Excel audit workbook, AI recommendation CSV, action plan CSV, normalized Search Console CSV, and AI visibility template/results CSV.
 
 ## Run locally
+
 Requires Python 3.10+ and internet access.
-1. Unzip the package and open a terminal in the folder.
-2. Run `pip install -r requirements.txt`.
-3. Run `streamlit run app.py`.
+
+1. Extract the ZIP and open a terminal in this folder.
+2. Install dependencies: `pip install -r requirements.txt`
+3. Start the app: `streamlit run app.py`
 4. Open the local URL shown in the terminal.
 
-## Configure AI
-Set `OPENAI_API_KEY` in your environment or in Streamlit Community Cloud → App settings → Secrets, for example:
+## Optional AI setup
+
+Set `OPENAI_API_KEY` in your environment or Streamlit Community Cloud → App settings → Secrets:
 
 ```toml
 OPENAI_API_KEY = "your-api-key-here"
 ```
 
-Never commit a real API key to GitHub or put it in source code. OpenAI API usage is billed separately from ChatGPT subscriptions. AI recommendations are optional; the audit works without a key. Model output may be wrong, so review every recommendation before implementation. The app sends the target website URL, user-entered business context, selected page metadata and up to 25 audit findings to the configured API. Do not send confidential or personal data.
+Never commit a real key to GitHub or include it in screenshots. OpenAI API usage is billed separately from ChatGPT subscriptions. The AI feature sends the website URL, user-provided business context, selected page metadata and up to 25 findings to the configured API. Do not send confidential or personal data. Review every suggestion before implementation.
 
-## Limitations
-No JavaScript rendering, Search Console/GA4 integration, backlink analysis, field Core Web Vitals, or automated AI-answer/citation monitoring. The diagnostic score is a triage heuristic only. Crawling is limited to fetched HTML pages. Audit only sites you own or are authorized to assess; respect robots directives and rate limits. Never promise rankings, AI citations, traffic or revenue.
+## Deploying to Streamlit Community Cloud
 
+Upload the files in this folder to the root of your GitHub repository and set the main file path to `app.py`. Keep the repository private while testing. The app currently has no user authentication, tenant isolation, persistent database, billing or per-client access controls; do not expose it as a public multi-client service until these are implemented.
 
-## V1.4 Search Performance
-Use Google Search Console to export a Performance CSV for a selected property/date range, then upload it in the **Search performance** tab. The app summarizes clicks, impressions, CTR and (when present) average position. This is a CSV import workflow, not a direct Google OAuth/API connection. Standard query/page CSV exports are supported; bulk export workbooks may need to be exported as a single CSV first.
+## Limitations and responsible use
 
-## V1.5 AI Visibility
-Download the AI visibility CSV template, test the same buyer prompts manually in the listed AI platforms, record brand mentions and cited URLs, then upload the completed CSV in the **AI visibility** tab. The app calculates mention rate and platform summaries when the expected columns are present. It does not automatically query AI platforms or guarantee complete/representative results.
-
-## Security and interpretation
-- Do not upload credentials or confidential customer information.
-- Search Console data should be exported only by someone authorized to access the property.
-- AI visibility results are manually observed and vary by prompt, date, account, region and model.
-- SEO diagnostic scores and visibility rates are descriptive signals, not ranking or revenue guarantees.
+- No JavaScript rendering, direct Search Console API/OAuth, GA4 integration, backlink index, field Core Web Vitals, persistent projects/task history, or automatic AI-platform querying/citation verification.
+- The diagnostic score is a heuristic triage aid, not a Google metric, ranking forecast or guarantee.
+- Search Console data must be exported by an authorized property user. AI visibility is manually observed and varies by prompt, date, location, account and model version.
+- Audit only public sites you own or are authorized to assess. Respect robots.txt, site terms and reasonable crawl rates. Do not promise rankings, AI citations, traffic or revenue.
