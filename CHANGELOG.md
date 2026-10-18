@@ -16,3 +16,10 @@
 - Preserved the ₹0-initial-data-budget approach: the audit uses public HTML and robots.txt; Search Console data is currently imported from a user-exported CSV; AI visibility entries are manually observed; optional AI recommendations require a separately billed API key.
 
 This release does not add automated third-party AI platform monitoring, direct Search Console OAuth, recurring crawls, billing, email alerts, or managed multi-user production infrastructure.
+
+## UX correction — 2026-10-18
+- Added a Streamlit light theme configuration so deployment defaults do not force dark/default styling into the app.
+- Reworked primary and secondary button CSS for high contrast, consistent radius, hover feedback and accessible text contrast.
+- Updated sign-in and empty-project screens to use the same branded visual language as the dashboard.
+- Fixed dashboard action buttons to navigate directly to the selected workspace page by synchronizing the sidebar navigation state on rerun.
+- Automated tests still cover helper functions; Streamlit browser rendering could not be run in this environment because package-index DNS/network access is unavailable.

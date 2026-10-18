@@ -31,22 +31,30 @@ st.markdown("""
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover{background:#27334a;color:#fff}
 [data-testid="stSidebar"] [data-testid="stRadio"] [aria-checked="true"]+div{color:#fff}
 [data-testid="stSidebar"] [data-testid="stRadio"] input{accent-color:#818cf8}
-[data-testid="stSidebar"] button{border-color:#344054;background:#1f2937;color:#fff}
+[data-testid="stSidebar"] button,[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]{border:1px solid #344054!important;background:#1f2937!important;color:#f8fafc!important}
 [data-testid="stSidebar"] hr{border-color:#2d3748}
 [data-testid="stMetric"]{background:#fff;border:1px solid #e6eaf2;border-radius:14px;padding:16px 18px;box-shadow:0 2px 4px #10182804}
 [data-testid="stMetricLabel"]{color:#667085;font-size:12px}
 [data-testid="stMetricValue"]{color:#172033;font-weight:780}
 [data-testid="stVerticalBlockBorderWrapper"]{background:#fff;border:1px solid #e6eaf2;border-radius:15px;box-shadow:0 2px 4px #10182804}
-.stButton>button,[data-testid="stDownloadButton"] button{border-radius:9px;font-weight:650;border:1px solid #d0d5dd;min-height:38px}
-.stButton>button[kind="primary"],button[kind="primary"]{background:#4f46e5;color:white;border-color:#4f46e5}
-.stButton>button:hover{border-color:#818cf8;color:#3730a3}
+.stButton>button,[data-testid="stDownloadButton"] button,[data-testid="stFormSubmitButton"] button,[data-testid="stBaseButton-secondary"],[data-testid="stBaseButton-primary"]{border-radius:10px!important;font-weight:700!important;min-height:42px!important;transition:all .15s ease!important;box-shadow:0 1px 2px rgba(16,24,40,.05)!important}
+.stButton>button:not([kind="primary"]),[data-testid="stDownloadButton"] button,[data-testid="stBaseButton-secondary"]{background:#fff!important;color:#344054!important;border:1px solid #d0d5dd!important}
+.stButton>button[kind="primary"],[data-testid="stBaseButton-primary"],[data-testid="stFormSubmitButton"] button{background:linear-gradient(135deg,#5548e8,#4338ca)!important;color:#fff!important;border:1px solid #4f46e5!important}
+.stButton>button:hover,[data-testid="stBaseButton-secondary"]:hover{border-color:#8b83f6!important;color:#4338ca!important;background:#f7f7ff!important;transform:translateY(-1px)}
+.stButton>button[kind="primary"]:hover,[data-testid="stBaseButton-primary"]:hover,[data-testid="stFormSubmitButton"] button:hover{background:#3730a3!important;color:#fff!important;transform:translateY(-1px);box-shadow:0 5px 12px rgba(79,70,229,.18)!important}
+[data-testid="stTextInput"] label,[data-testid="stTextArea"] label,[data-testid="stSelectbox"] label,[data-testid="stSlider"] label,[data-testid="stRadio"] label,[data-testid="stCheckbox"] label{color:#344054!important;font-weight:600}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stSelectbox"] div[data-baseweb="select"]{background:#fff!important;color:#172033!important;border-radius:10px}
+[data-testid="stForm"]{background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:18px}
+[data-testid="stAlert"]{border-radius:12px}
 [data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stSelectbox"] div[data-baseweb="select"]{border-radius:9px}
 [data-testid="stDataFrame"]{border:1px solid #e6eaf2;border-radius:12px;overflow:hidden}
 [data-testid="stTabs"] button{font-weight:650}
 .ogs-eyebrow{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#4f46e5;margin-bottom:5px}
 .ogs-heading{font-size:29px;font-weight:780;letter-spacing:-.7px;line-height:1.2;color:#172033;margin:4px 0 8px}
 .ogs-sub{color:#667085;font-size:13px;line-height:1.6;margin:0 0 18px}
-.ogs-hero{background:linear-gradient(125deg,#f0f4ff,#fff 60%,#e8fbf5);border:1px solid #dfe5fb;border-radius:20px;padding:24px 26px;margin:0 0 20px}
+.ogs-hero{background:linear-gradient(125deg,#eef2ff 0%,#fff 58%,#e8fbf5 100%);border:1px solid #dfe5fb;border-radius:20px;padding:28px 30px;margin:0 0 20px;box-shadow:0 8px 28px rgba(43,54,110,.04)}
+.ogs-auth{max-width:1040px;margin:4vh auto 0;padding:36px 40px;background:linear-gradient(125deg,#eef2ff 0%,#fff 58%,#e8fbf5 100%);border:1px solid #dfe5fb;border-radius:24px;box-shadow:0 14px 45px rgba(43,54,110,.07)}
+.ogs-auth h1{font-size:36px;letter-spacing:-1px;margin-bottom:6px}.ogs-auth p{color:#667085}.ogs-empty{background:#fff;border:1px solid #e6eaf2;border-radius:18px;padding:30px;text-align:center}.ogs-section{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:26px 0 12px}.ogs-section h2{margin:0;font-size:21px}.ogs-step{background:#fff;border:1px solid #e6eaf2;border-radius:14px;padding:16px 18px;margin-bottom:10px}
 .ogs-hero h2{font-size:23px;font-weight:780;letter-spacing:-.6px;color:#172033;margin:5px 0 8px}
 .ogs-hero p{font-size:13px;color:#667085;line-height:1.6;margin:0}
 .ogs-card-title{font-size:15px;font-weight:750;color:#172033;margin:0 0 5px}
@@ -335,9 +343,8 @@ def openai_call(system_prompt, user_prompt, model=None):
 
 # ---------- Auth ----------
 def auth_screen():
-    st.markdown('<div class="hero"><h1>Organic Growth Studio</h1><p>Find opportunities. Fix issues. Measure organic growth.</p></div>',unsafe_allow_html=True)
-    st.subheader("Welcome")
-    st.write("Create a private workspace to save audits, search data, tasks and AI visibility observations.")
+    st.markdown('<div class="ogs-auth"><div class="ogs-eyebrow">Your organic growth command centre</div><h1>Organic Growth Studio</h1><p>Find opportunities. Fix issues. Measure organic growth—with clear evidence and practical next steps.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="ogs-heading">Welcome back</div><div class="ogs-sub">Sign in to your workspace or create a free account to get started.</div>',unsafe_allow_html=True)
     tab1,tab2=st.tabs(["Sign in","Create account"])
     with tab1:
         with st.form("signin"):
@@ -374,6 +381,9 @@ if not current_user():
 user=current_user()
 uid=user["id"]
 projects=get_projects(uid)
+# Action buttons can navigate to a page directly; keep the sidebar radio in sync.
+if st.session_state.get("jump_page"):
+    st.session_state["nav_page"] = st.session_state.pop("jump_page")
 
 with st.sidebar:
     st.markdown("## 🌱 Organic Growth Studio")
@@ -382,7 +392,7 @@ with st.sidebar:
     if st.button("Sign out",use_container_width=True):
         st.session_state.pop("user",None); st.rerun()
     st.divider()
-    page=st.radio("Workspace",["Overview","Website audit","AI recommendations","Search performance","AI visibility","Competitors","Action center","Reports","Settings"],label_visibility="visible")
+    page=st.radio("Workspace",["Overview","Website audit","AI recommendations","Search performance","AI visibility","Competitors","Action center","Reports","Settings"],key="nav_page",label_visibility="visible")
     st.divider()
     if st.button("＋ New project",use_container_width=True):
         st.session_state["new_project"]=True
@@ -417,8 +427,12 @@ with st.sidebar:
         st.caption(f"Project created {project['created_at'][:10]}")
 
 if not project:
-    st.markdown('<div class="hero"><h1>Your organic growth, in one place.</h1><p>Create a project in the sidebar to start auditing, analyzing search data and tracking AI visibility.</p></div>',unsafe_allow_html=True)
-    st.info("Start by creating a project in the left sidebar.")
+    st.markdown('<div class="ogs-hero"><div class="ogs-eyebrow">Welcome to your workspace</div><h2>Your organic growth, in one place.</h2><p>Create your first project to run a website audit, find search opportunities and track real AI-answer observations. No demo metrics—your dashboard starts with your data.</p></div>',unsafe_allow_html=True)
+    st.markdown('<div class="ogs-empty"><div style="font-size:38px">🌱</div><h2>Start with your first website</h2><p style="color:#667085">Add a project to unlock your audit, recommendations and reporting workspace.</p></div>',unsafe_allow_html=True)
+    if st.button("＋ Create your first project",type="primary",use_container_width=False):
+        st.session_state["new_project"]=True
+        st.rerun()
+    st.caption("Your data is kept separate by account. Only metrics derived from saved project data will appear here.")
     st.stop()
 
 def latest_audit(project_id):
@@ -460,7 +474,7 @@ if page=="Overview":
         st.markdown(f'<div class="ogs-hero"><div class="ogs-eyebrow">Start with your website</div><h2>Find out what’s holding your website back.</h2><p>Get a guided review of technical SEO, content opportunities and AI search readiness. No SEO expertise required.</p><p style="margin-top:12px"><b>{safe_project_domain}</b></p></div>',unsafe_allow_html=True)
         if st.button("＋ Run new audit",type="primary",use_container_width=True):
             st.session_state["jump_page"]="Website audit"
-            st.info("Choose Website audit in the workspace navigation to configure and run the crawl.")
+            st.rerun()
     with right:
         if audit:
             score=int(audit["score"]); score_label=f"{score}/100"; pages_count=len(audit["pages"]); issue_count=len(audit["findings"])
@@ -491,7 +505,7 @@ if page=="Overview":
             col1.markdown(f'<div class="ogs-card-title">{html.escape(title)}</div><div class="ogs-muted">{html.escape(desc)}</div>',unsafe_allow_html=True)
             if col2.button("Open →",key=f"overview_step_{idx}",use_container_width=True):
                 st.session_state["jump_page"]=dest
-                st.info(f"Open **{dest}** from the Workspace navigation.")
+                st.rerun()
     st.caption("Only saved crawl and imported/recorded project data are shown. Diagnostic scores are heuristic and do not guarantee rankings, traffic or AI citations.")
 
 elif page=="Website audit":
