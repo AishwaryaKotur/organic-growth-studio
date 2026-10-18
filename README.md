@@ -81,3 +81,30 @@ This is a V3 product prototype, not a fully production-hardened SaaS service.
 - `app.py` — Streamlit application
 - `requirements.txt` — dependencies
 - `README.md` — setup, deployment and limitations
+
+
+## Product build blueprint
+See `PRODUCT_BUILD_BLUEPRINT.md` for the full feature specification, acceptance criteria, architecture requirements, and production launch gates. `ui_preview.html` is a static visual mockup with illustrative data, not the connected app.
+
+## Run tests
+
+```bash
+python -m pip install -r requirements.txt
+python -m pip install pytest
+python -m pytest -q
+```
+
+The tests cover actual helper-function definitions from `app.py` without launching the Streamlit UI.
+
+## Current implementation boundaries (read before client use)
+
+- **Implemented:** user registration/sign-in for a prototype, project-scoped SQLite records, a bounded same-origin HTML diagnostic crawl, heuristic issue list with evidence and suggested actions, CSV import for exported Search Console data, manual AI-answer observations, homepage-level competitor signal comparison, task tracking, CSV downloads and history.
+- **Optional paid integration:** OpenAI API-powered recommendations, only when an API key is configured. API use is billed separately by the provider.
+- **Not implemented:** Search Console OAuth/API sync, automated live checks across ChatGPT/Perplexity/Gemini, reliable backlink/keyword databases, scheduled crawling, notifications, Stripe billing, team roles, managed database, enterprise SSO, formal security audit, or production-grade account recovery/rate limiting.
+- **Diagnostic score:** heuristic, based on detected issues. It is not a Google metric and does not predict rankings, citations or leads.
+
+## Deployment and security gates
+
+This is a preview/early validation build, not a production SaaS for sensitive customer data. Before inviting paying customers, configure persistent private storage, backups, HTTPS and secrets; add rate limiting and account recovery; harden DNS/IP validation against rebinding; set explicit crawl limits and robots behavior; add monitoring and dependency scanning; run tests against a staging deployment; and obtain a security review. Do not commit API keys or customer exports to Git.
+
+On Streamlit Community Cloud, local SQLite files may not be durable across rebuilds/redeployments. Use a persistent database/storage service before relying on this for business-critical data.

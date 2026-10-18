@@ -1,4 +1,4 @@
-import os, re, json, time, hashlib, sqlite3, smtplib, ssl, csv, io, socket, ipaddress
+import os, re, json, time, hashlib, sqlite3, smtplib, ssl, csv, io, socket, ipaddress, html
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urljoin, urldefrag, urlunparse, parse_qsl, urlencode
 from email.message import EmailMessage
@@ -204,6 +204,11 @@ def fetch_html(url):
 
 def parse_page(url, html, status, headers=None):
     soup=BeautifulSoup(html,"html.parser")
+    # Extract JSON-LD before removing scripts from the visible-text DOM.
+    jsonld=[]
+    for script in soup.find_all("script",type=re.compile("ld\\+json",re.I)):
+        try: jsonld.append(json.loads(script.string or script.get_text()))
+        except Exception: pass
     for x in soup(["script","style","noscript","svg"]): x.decompose()
     title=soup.title.get_text(" ",strip=True) if soup.title else ""
     desc=soup.find("meta",attrs={"name":re.compile("^description$",re.I)})
@@ -219,10 +224,6 @@ def parse_page(url, html, status, headers=None):
         if target: links.append((target,a.get_text(" ",strip=True)))
     text=soup.get_text(" ",strip=True)
     words=len(re.findall(r"\b[\w'-]+\b",text))
-    jsonld=[]
-    for s in soup.find_all("script",type=re.compile("ld\\+json",re.I)):
-        try: jsonld.append(json.loads(s.string or s.get_text()))
-        except Exception: pass
     return {"url":url,"status":status,"title":title,"title_len":len(title),"description":desc.get("content","").strip() if desc else "",
       "description_len":len(desc.get("content","").strip()) if desc else 0,"h1":h1,"h1_count":len(h1),
       "canonical":normalize_url(urljoin(url,canon.get("href"))) if canon and canon.get("href") else "",
@@ -413,7 +414,9 @@ def report_download(label,df,filename):
     st.download_button(label,data,filename,mime="text/csv",use_container_width=False)
 
 if page=="Overview":
-    st.markdown(f'<div class="hero"><h1>{project["name"]}</h1><p>{project["domain"]} · Your search and AI visibility workspace</p></div>',unsafe_allow_html=True)
+    safe_project_name = html.escape(str(project["name"]))
+    safe_project_domain = html.escape(str(project["domain"]))
+    st.markdown(f'<div class="hero"><h1>{safe_project_name}</h1><p>{safe_project_domain} · Your search and AI visibility workspace</p></div>',unsafe_allow_html=True)
     st.write("Your next best actions, all in one place. Start with a crawl, connect search data, and record AI-answer observations.")
     tasks=query("SELECT * FROM tasks WHERE project_id=? AND status!='Done'",(pid,))
     vis=query("SELECT * FROM visibility_runs WHERE project_id=? ORDER BY tested_at DESC",(pid,))
