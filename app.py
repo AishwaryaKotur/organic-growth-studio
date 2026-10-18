@@ -19,13 +19,42 @@ st.set_page_config(page_title=APP_NAME, page_icon="🌱", layout="wide", initial
 
 st.markdown("""
 <style>
-.block-container{padding-top:1.5rem;max-width:1450px}
-[data-testid="stSidebar"]{border-right:1px solid rgba(128,128,128,.18)}
-.hero{padding:2rem;border-radius:20px;background:linear-gradient(120deg,#172554,#1d4ed8 65%,#0f766e);color:white;margin-bottom:1.3rem}
-.hero h1{font-size:2.4rem;margin:0 0 .45rem 0}
-.hero p{font-size:1.05rem;opacity:.93;margin:0}
-.small-muted{color:#64748b;font-size:.9rem}
-.metric-card{padding:1rem;border:1px solid rgba(128,128,128,.25);border-radius:14px}
+:root{--ogs-ink:#172033;--ogs-muted:#667085;--ogs-line:#e6eaf2;--ogs-bg:#f5f7fb;--ogs-blue:#4f46e5;--ogs-nav:#111827}
+.stApp{background:#f5f7fb;color:#172033}
+[data-testid="stHeader"]{background:rgba(245,247,251,.92)}
+.block-container{padding-top:1.2rem;padding-bottom:2.5rem;max-width:1500px}
+[data-testid="stSidebar"]{background:#111827;border-right:1px solid #27334a}
+[data-testid="stSidebar"] *{color:#d6dbea}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2{font-size:17px;color:#fff;letter-spacing:-.3px}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"]{color:#94a3b8}
+[data-testid="stSidebar"] [data-testid="stRadio"] label{border-radius:9px;padding:7px 9px;margin:2px 0;color:#aebbd0}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover{background:#27334a;color:#fff}
+[data-testid="stSidebar"] [data-testid="stRadio"] [aria-checked="true"]+div{color:#fff}
+[data-testid="stSidebar"] [data-testid="stRadio"] input{accent-color:#818cf8}
+[data-testid="stSidebar"] button{border-color:#344054;background:#1f2937;color:#fff}
+[data-testid="stSidebar"] hr{border-color:#2d3748}
+[data-testid="stMetric"]{background:#fff;border:1px solid #e6eaf2;border-radius:14px;padding:16px 18px;box-shadow:0 2px 4px #10182804}
+[data-testid="stMetricLabel"]{color:#667085;font-size:12px}
+[data-testid="stMetricValue"]{color:#172033;font-weight:780}
+[data-testid="stVerticalBlockBorderWrapper"]{background:#fff;border:1px solid #e6eaf2;border-radius:15px;box-shadow:0 2px 4px #10182804}
+.stButton>button,[data-testid="stDownloadButton"] button{border-radius:9px;font-weight:650;border:1px solid #d0d5dd;min-height:38px}
+.stButton>button[kind="primary"],button[kind="primary"]{background:#4f46e5;color:white;border-color:#4f46e5}
+.stButton>button:hover{border-color:#818cf8;color:#3730a3}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stSelectbox"] div[data-baseweb="select"]{border-radius:9px}
+[data-testid="stDataFrame"]{border:1px solid #e6eaf2;border-radius:12px;overflow:hidden}
+[data-testid="stTabs"] button{font-weight:650}
+.ogs-eyebrow{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#4f46e5;margin-bottom:5px}
+.ogs-heading{font-size:29px;font-weight:780;letter-spacing:-.7px;line-height:1.2;color:#172033;margin:4px 0 8px}
+.ogs-sub{color:#667085;font-size:13px;line-height:1.6;margin:0 0 18px}
+.ogs-hero{background:linear-gradient(125deg,#f0f4ff,#fff 60%,#e8fbf5);border:1px solid #dfe5fb;border-radius:20px;padding:24px 26px;margin:0 0 20px}
+.ogs-hero h2{font-size:23px;font-weight:780;letter-spacing:-.6px;color:#172033;margin:5px 0 8px}
+.ogs-hero p{font-size:13px;color:#667085;line-height:1.6;margin:0}
+.ogs-card-title{font-size:15px;font-weight:750;color:#172033;margin:0 0 5px}
+.ogs-muted{font-size:12px;color:#667085}
+.ogs-notice{background:#eff6ff;border:1px solid #dbeafe;color:#1e40af;padding:12px 14px;border-radius:10px;font-size:12px;line-height:1.5;margin:12px 0}
+.ogs-chip{display:inline-block;border-radius:999px;padding:4px 8px;background:#e9f8f1;color:#08764d;font-size:10px;font-weight:750}
+h1,h2,h3{color:#172033}
+@media(max-width:800px){.block-container{padding-left:1rem;padding-right:1rem}.ogs-heading{font-size:25px}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -348,11 +377,12 @@ projects=get_projects(uid)
 
 with st.sidebar:
     st.markdown("## 🌱 Organic Growth Studio")
+    st.caption("ORGANIC GROWTH WORKSPACE")
     st.caption(user["email"])
     if st.button("Sign out",use_container_width=True):
         st.session_state.pop("user",None); st.rerun()
     st.divider()
-    page=st.radio("Workspace",["Overview","Website audit","AI recommendations","Search performance","AI visibility","Competitors","Action center","Reports & history","Settings"],label_visibility="visible")
+    page=st.radio("Workspace",["Overview","Website audit","AI recommendations","Search performance","AI visibility","Competitors","Action center","Reports","Settings"],label_visibility="visible")
     st.divider()
     if st.button("＋ New project",use_container_width=True):
         st.session_state["new_project"]=True
@@ -399,6 +429,10 @@ def latest_audit(project_id):
 
 audit=latest_audit(pid)
 
+# Lightweight application header mirrors the approved preview layout.
+page_labels={"Overview":"Overview","Website audit":"Website audit","AI recommendations":"AI recommendations","Search performance":"Search performance","AI visibility":"AI visibility","Competitors":"Competitors","Action center":"Action center","Reports":"Reports","Settings":"Settings"}
+st.markdown(f'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e6eaf2;padding:0 2px 13px;margin-bottom:22px;color:#667085;font-size:12px"><span>Workspace / <b style="color:#172033">{html.escape(page_labels.get(page,page))}</b></span><span>{html.escape(user["email"])}</span></div>',unsafe_allow_html=True)
+
 def save_audit(result):
     execute("INSERT INTO audits(project_id,created_at,score,pages,findings_json,pages_json) VALUES(?,?,?,?,?,?)",
       (pid,result["created_at"],result["score"],len(result["pages"]),json.dumps(result["findings"]),json.dumps(result["pages"])))
@@ -416,31 +450,52 @@ def report_download(label,df,filename):
 if page=="Overview":
     safe_project_name = html.escape(str(project["name"]))
     safe_project_domain = html.escape(str(project["domain"]))
-    st.markdown(f'<div class="hero"><h1>{safe_project_name}</h1><p>{safe_project_domain} · Your search and AI visibility workspace</p></div>',unsafe_allow_html=True)
-    st.write("Your next best actions, all in one place. Start with a crawl, connect search data, and record AI-answer observations.")
     tasks=query("SELECT * FROM tasks WHERE project_id=? AND status!='Done'",(pid,))
     vis=query("SELECT * FROM visibility_runs WHERE project_id=? ORDER BY tested_at DESC",(pid,))
-    gsc=query("SELECT SUM(clicks) clicks,SUM(impressions) impressions FROM gsc_rows WHERE project_id=?",(pid,))
+    gsc_rows=query("SELECT * FROM gsc_rows WHERE project_id=?",(pid,))
+    gsc_df=pd.DataFrame([dict(r) for r in gsc_rows]) if gsc_rows else pd.DataFrame()
+    st.markdown('<div class="ogs-eyebrow">Organic growth workspace</div><div class="ogs-heading">Good morning, let’s grow your visibility.</div><div class="ogs-sub">Your search performance, AI visibility and next best actions — all in one place.</div>',unsafe_allow_html=True)
+    left,right=st.columns([1.2,.8],gap="large")
+    with left:
+        st.markdown(f'<div class="ogs-hero"><div class="ogs-eyebrow">Start with your website</div><h2>Find out what’s holding your website back.</h2><p>Get a guided review of technical SEO, content opportunities and AI search readiness. No SEO expertise required.</p><p style="margin-top:12px"><b>{safe_project_domain}</b></p></div>',unsafe_allow_html=True)
+        if st.button("＋ Run new audit",type="primary",use_container_width=True):
+            st.session_state["jump_page"]="Website audit"
+            st.info("Choose Website audit in the workspace navigation to configure and run the crawl.")
+    with right:
+        if audit:
+            score=int(audit["score"]); score_label=f"{score}/100"; pages_count=len(audit["pages"]); issue_count=len(audit["findings"])
+            p1=sum(1 for f in audit["findings"] if f.get("priority")=="P1")
+            st.markdown('<div class="ogs-card-title">Website health</div><div class="ogs-muted">Latest saved diagnostic · heuristic, not a Google score</div>',unsafe_allow_html=True)
+            st.metric("Diagnostic score",score_label)
+            st.progress(max(0,min(score,100))/100)
+            st.caption(f"{pages_count} pages audited · {issue_count} findings · {p1} high-priority findings")
+        else:
+            st.markdown('<div class="ogs-card-title">Website health</div><div class="ogs-muted">Your score appears after the first real crawl.</div>',unsafe_allow_html=True)
+            st.info("No audit yet. Run an audit to calculate a score from detected issues.")
+    st.markdown("### Your growth snapshot")
     a,b,c,d=st.columns(4)
-    a.metric("Latest diagnostic score",f'{audit["score"]}/100' if audit else "Not run")
-    b.metric("Pages audited",len(audit["pages"]) if audit else 0)
-    c.metric("Open action items",len(tasks))
+    a.metric("Diagnostic score",f'{audit["score"]}/100' if audit else "—")
+    b.metric("Pages checked",len(audit["pages"]) if audit else 0)
+    c.metric("Issues to review",len(audit["findings"]) if audit else 0,help="Findings from the latest saved crawl")
     d.metric("AI observations",len(vis))
-    st.subheader("Recommended next steps")
+    st.markdown("### Recommended next steps")
     steps=[]
-    if not audit: steps.append(("Run your first audit","Check important technical SEO signals.","Website audit"))
-    elif audit["findings"]: steps.append(("Review top SEO findings",f'{len(audit["findings"])} findings need human review.',"Website audit"))
-    if not gsc or not gsc[0]["impressions"]: steps.append(("Import Search Console data","Find queries and pages already earning visibility.","Search performance"))
-    if not vis: steps.append(("Start AI visibility tracking","Test real buyer prompts and record what each AI platform returns.","AI visibility"))
+    if not audit: steps.append(("Run your first website audit","Check important technical SEO signals using a real crawl.","Website audit"))
+    elif audit["findings"]: steps.append(("Review your SEO findings",f'{len(audit["findings"])} findings from the latest crawl need human review.',"Website audit"))
+    if gsc_df.empty: steps.append(("Import Search Console data","Find queries and pages already earning search visibility.","Search performance"))
+    if not vis: steps.append(("Start AI visibility tracking","Test buyer prompts on AI platforms and record the actual responses.","AI visibility"))
     steps.append(("Work through your action plan","Track fixes and verify them with a follow-up audit.","Action center"))
-    for title,desc,dest in steps:
+    for idx,(title,desc,dest) in enumerate(steps):
         with st.container(border=True):
-            col1,col2=st.columns([4,1]); col1.markdown(f"**{title}**"); col1.caption(desc)
-            if col2.button("Open",key="step_"+title): st.session_state["jump_page"]=dest; st.info(f"Choose **{dest}** from the sidebar.")
-    st.caption("Scores and recommendations are diagnostic aids, not guarantees of rankings, AI citations or leads.")
+            col1,col2=st.columns([4,1])
+            col1.markdown(f'<div class="ogs-card-title">{html.escape(title)}</div><div class="ogs-muted">{html.escape(desc)}</div>',unsafe_allow_html=True)
+            if col2.button("Open →",key=f"overview_step_{idx}",use_container_width=True):
+                st.session_state["jump_page"]=dest
+                st.info(f"Open **{dest}** from the Workspace navigation.")
+    st.caption("Only saved crawl and imported/recorded project data are shown. Diagnostic scores are heuristic and do not guarantee rankings, traffic or AI citations.")
 
 elif page=="Website audit":
-    st.title("Website audit")
+    st.markdown('<div class="ogs-eyebrow">Technical SEO</div><div class="ogs-heading">Website audit</div><div class="ogs-sub">Find technical and on-page issues, see evidence, and understand how to fix them.</div>',unsafe_allow_html=True)
     st.write("Scan pages you own or are authorized to assess. We respect robots.txt, limit request rates and do not bypass access controls.")
     with st.form("audit_form"):
         audit_url=st.text_input("Website URL",value=project["domain"])
@@ -486,7 +541,7 @@ elif page=="Website audit":
     else: st.info("Run an audit to populate this section.")
 
 elif page=="AI recommendations":
-    st.title("AI recommendations")
+    st.markdown('<div class="ogs-eyebrow">AI-assisted analysis</div><div class="ogs-heading">AI recommendations</div><div class="ogs-sub">Contextual suggestions grounded in your crawl evidence and business goals.</div>',unsafe_allow_html=True)
     st.write("Use a language model to explain audit evidence and draft suggestions grounded in your business context.")
     if not audit: st.warning("Run a website audit first.")
     else:
@@ -509,7 +564,7 @@ elif page=="AI recommendations":
             st.download_button("Download AI analysis",st.session_state["ai_response"],"ai-seo-analysis.md",mime="text/markdown")
 
 elif page=="Search performance":
-    st.title("Search performance")
+    st.markdown('<div class="ogs-eyebrow">Google Search Console</div><div class="ogs-heading">Search performance</div><div class="ogs-sub">Understand which queries and pages earn impressions and clicks.</div>',unsafe_allow_html=True)
     st.write("Import a CSV export from Google Search Console → Performance. This import does not connect to Google automatically.")
     with st.expander("How to export data"):
         st.markdown("In Search Console, open **Performance → Search results**, choose a date range, export the table as CSV, then upload it below. Export query and page tables separately if you want both views.")
@@ -550,7 +605,7 @@ elif page=="Search performance":
     else: st.info("No Search Console data saved yet.")
 
 elif page=="AI visibility":
-    st.title("AI visibility tracker")
+    st.markdown('<div class="ogs-eyebrow">Answer engine optimization</div><div class="ogs-heading">AI visibility</div><div class="ogs-sub">Track whether your brand appears in AI answers to the buyer questions that matter.</div>',unsafe_allow_html=True)
     st.write("Record repeatable tests in AI answer platforms. This feature stores observations you actually make; it does not automatically query ChatGPT, Gemini or Perplexity.")
     with st.form("vis_form"):
         tested=st.date_input("Test date",value=datetime.now().date())
@@ -578,7 +633,7 @@ elif page=="AI visibility":
     else: st.info("No AI visibility observations yet. Start with 5–10 buyer prompts and rerun them on a consistent schedule.")
 
 elif page=="Competitors":
-    st.title("Competitor intelligence")
+    st.markdown('<div class="ogs-eyebrow">Competitive intelligence</div><div class="ogs-heading">Competitor insights</div><div class="ogs-sub">Compare public on-page signals against selected competitors.</div>',unsafe_allow_html=True)
     st.write("This version can audit competitor URLs you provide and compare on-page signals. It does not provide third-party keyword volumes, backlink databases or automatic AI citation data.")
     try: competitors=json.loads(project["competitors"] or "[]")
     except Exception: competitors=[]
@@ -600,7 +655,7 @@ elif page=="Competitors":
     st.caption("Only audit competitor sites for publicly accessible information and within applicable terms. Avoid treating homepage signals as a full competitive analysis.")
 
 elif page=="Action center":
-    st.title("Growth action center")
+    st.markdown('<div class="ogs-eyebrow">Execution</div><div class="ogs-heading">Growth action plan</div><div class="ogs-sub">Turn findings into tasks, assign status and verify fixes.</div>',unsafe_allow_html=True)
     st.write("Tasks are seeded from audit findings. Review the evidence before implementing any change.")
     rows=query("SELECT * FROM tasks WHERE project_id=? ORDER BY CASE priority WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,created_at DESC",(pid,))
     if rows:
@@ -620,8 +675,8 @@ elif page=="Action center":
         report_download("Export action plan",df,"growth-action-plan.csv")
     else: st.info("Run an audit to generate initial action items.")
 
-elif page=="Reports & history":
-    st.title("Reports & history")
+elif page=="Reports":
+    st.markdown('<div class="ogs-eyebrow">Reporting</div><div class="ogs-heading">Reports & history</div><div class="ogs-sub">Share clear progress and next steps with stakeholders.</div>',unsafe_allow_html=True)
     audits=query("SELECT * FROM audits WHERE project_id=? ORDER BY created_at DESC",(pid,))
     if audits:
         hist=pd.DataFrame([{"date":r["created_at"],"score":r["score"],"pages":r["pages"],"findings":len(json.loads(r["findings_json"]))} for r in audits])

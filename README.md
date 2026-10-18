@@ -1,6 +1,6 @@
-# Organic Growth Studio V3.0
+# Organic Growth Studio V3.1 — Preview-aligned Streamlit UI
 
-A Streamlit-based organic growth workspace with technical SEO auditing, optional OpenAI recommendations, Search Console CSV imports, manually recorded AI visibility observations, competitor homepage comparisons, action tracking, and project/audit history.
+A Streamlit-based organic growth workspace with a redesigned, preview-aligned light SaaS interface and real project-backed workflows: technical SEO auditing, optional OpenAI recommendations, Search Console CSV imports, manually recorded AI visibility observations, competitor homepage comparisons, action tracking, and project/audit history.
 
 ## Run locally
 
@@ -84,7 +84,7 @@ This is a V3 product prototype, not a fully production-hardened SaaS service.
 
 
 ## Product build blueprint
-See `PRODUCT_BUILD_BLUEPRINT.md` for the full feature specification, acceptance criteria, architecture requirements, and production launch gates. `ui_preview.html` is a static visual mockup with illustrative data, not the connected app.
+See `PRODUCT_BUILD_BLUEPRINT.md` for the full feature specification, acceptance criteria, architecture requirements, and production launch gates. `ui_preview.html` remains the original static visual reference. The Streamlit interface has now been restyled to follow its visual language and its Overview/feature hierarchy. Streamlit-native components mean it is not pixel-identical to standalone HTML, but the hosted Python app—not the HTML mockup—is the source of truth for functionality. The live interface uses project-backed data and avoids the mock metrics from the preview.
 
 ## Run tests
 
