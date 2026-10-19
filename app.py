@@ -1,4 +1,4 @@
-import os, re, json, time, hashlib, sqlite3, smtplib, ssl, csv, io, socket, ipaddress, html
+import os, re, json, time, hashlib, sqlite3, smtplib, ssl, csv, io, socket, ipaddress, html, xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urljoin, urldefrag, urlunparse, parse_qsl, urlencode
 from email.message import EmailMessage
@@ -10,10 +10,14 @@ from bs4 import BeautifulSoup
 
 APP_NAME = "Organic Growth Studio"
 DB_PATH = os.getenv("OGS_DB_PATH", "organic_growth_studio.db")
-UA = "OrganicGrowthStudioAudit/3.0 (+authorized-site-audit)"
+UA = "OrganicGrowthStudioAudit/4.2 (+authorized-site-audit)"
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 MAX_BODY_BYTES = 2_000_000
 TIMEOUT = 15
+MAX_CRAWL_PAGES = 50  # Internal safety limit; not exposed as a user setting.
+CRAWL_DELAY_SECONDS = 0.5
+MAX_SITEMAPS = 10
+MAX_SITEMAP_URLS = 500
 
 st.set_page_config(page_title=APP_NAME, page_icon="🌱", layout="wide", initial_sidebar_state="expanded")
 
@@ -344,18 +348,34 @@ def ensure_subscription(uid):
 # ---------- URL and crawler safety ----------
 TRACKING_KEYS = {"gclid","fbclid","gbraid","wbraid","srsltid","gad_source","msclkid"}
 def normalize_url(url):
-    p = urlparse(url.strip())
-    scheme = p.scheme.lower() or "https"
-    host = (p.hostname or "").lower().rstrip(".")
-    if not host: return ""
+    """Normalize a user-entered public URL; accept a bare domain as https by default."""
+    raw = (url or "").strip()
+    if not raw or any(ch.isspace() for ch in raw):
+        return ""
+    if not re.match(r"^https?://", raw, re.I):
+        # Friendly input: example.com, www.example.com/path. Do not reinterpret arbitrary words.
+        first = raw.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
+        if "." not in first and first.lower() != "localhost":
+            return ""
+        raw = "https://" + raw.lstrip("/")
+    try:
+        p = urlparse(raw)
+        scheme = p.scheme.lower()
+        host = (p.hostname or "").lower().rstrip(".")
+        if scheme not in ("http", "https") or not host:
+            return ""
+        port = p.port
+    except ValueError:
+        return ""
     netloc = host
-    if p.port and not ((scheme=="https" and p.port==443) or (scheme=="http" and p.port==80)):
-        netloc += f":{p.port}"
-    path = re.sub("/{2,}", "/", p.path or "/")
-    if path != "/" and path.endswith("/"): path = path[:-1]
-    qs = [(k,v) for k,v in parse_qsl(p.query, keep_blank_values=True)
+    if port and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
+        netloc += f":{port}"
+    path = re.sub(r"/{2,}", "/", p.path or "/")
+    if path != "/" and path.endswith("/"):
+        path = path[:-1]
+    qs = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True)
           if k.lower() not in TRACKING_KEYS and not k.lower().startswith("utm_")]
-    return urlunparse((scheme,netloc,path,"",urlencode(qs,doseq=True),""))
+    return urlunparse((scheme, netloc, path, "", urlencode(qs, doseq=True), ""))
 
 def validate_public_url(url):
     p = urlparse(url)
@@ -382,12 +402,19 @@ def same_origin(url, base):
     a,b=urlparse(url),urlparse(base)
     return a.scheme==b.scheme and (a.hostname or "").lower()==(b.hostname or "").lower() and (a.port or (443 if a.scheme=="https" else 80))==(b.port or (443 if b.scheme=="https" else 80))
 
-def robots_allowed(base, path):
+def robots_allowed(base, path, parser=None, checked=False):
+    """Use a crawl-scoped parsed robots policy to avoid downloading robots.txt per page."""
     try:
         from urllib.robotparser import RobotFileParser
-        rp=RobotFileParser()
-        rp.set_url(urljoin(base, "/robots.txt"))
-        rp.read()
+        rp=parser
+        if rp is None and not checked:
+            rp=RobotFileParser()
+            rp.set_url(urljoin(base, "/robots.txt"))
+            rp.read()
+        # If robots.txt was checked but unavailable/unparseable, don't silently block every page;
+        # the report records that the rules could not be verified.
+        if rp is None:
+            return True
         return rp.can_fetch(UA, urljoin(base,path))
     except Exception:
         return True
@@ -466,46 +493,79 @@ def make_findings(pages):
         if p.get("internal_links",0)==0: add(p,"P2","Internal linking","No internal links detected","No same-origin links were detected in parsed HTML.","Check whether this page should link to relevant pages or be linked from navigation.","Medium")
     return findings
 
-def crawl_site(start_url, max_pages=25, delay=0.5, scope_prefix=None):
+def crawl_site(start_url, max_pages=MAX_CRAWL_PAGES, delay=CRAWL_DELAY_SECONDS, scope_prefix=None):
+    """Bounded same-origin crawl, seeded from homepage links and public sitemap URLs."""
     start=normalize_url(start_url)
     ok,msg=validate_public_url(start)
     if not ok: raise ValueError(msg)
     p=urlparse(start); base=f"{p.scheme}://{p.netloc}"
-    todo=[start]; seen=set(); pages=[]; notes=[]
+    # The UI always scans the hostname root. This fallback also protects direct helper calls.
+    root=f"{p.scheme}://{p.netloc}/"
+    # Fetch and parse robots once per scan instead of once per page.
+    robots_result=fetch_public_text(urljoin(base,"/robots.txt"),200_000)
+    robots_parser=None
+    if robots_result.get("ok"):
+        try:
+            from urllib.robotparser import RobotFileParser
+            robots_parser=RobotFileParser()
+            robots_parser.set_url(urljoin(base,"/robots.txt"))
+            robots_parser.parse(robots_result.get("text","").splitlines())
+        except Exception:
+            robots_parser=None
+    else:
+        notes_robots=f"robots.txt could not be verified for crawl permissions: {robots_result.get('error') or 'unavailable'}"
+    todo=[root]; seen=set(); pages=[]; notes=[]; sitemap_discovered=False; sitemap_count=0
+    if not robots_result.get("ok"):
+        notes.append(notes_robots)
+    max_pages=max(1,min(int(max_pages or MAX_CRAWL_PAGES),MAX_CRAWL_PAGES))
     while todo and len(pages)<max_pages:
         url=normalize_url(todo.pop(0))
-        if not url or url in seen or not same_origin(url,start): continue
+        if not url or url in seen or not same_origin(url,root): continue
         if scope_prefix and not (urlparse(url).path == scope_prefix or urlparse(url).path.startswith(scope_prefix.rstrip("/") + "/")):
             continue
         seen.add(url)
-        if not robots_allowed(base,urlparse(url).path or "/"):
+        if not robots_allowed(base,urlparse(url).path or "/",parser=robots_parser,checked=True):
             notes.append(f"Skipped robots-disallowed URL: {url}")
             continue
         try:
             fetched=fetch_html(url)
             if "redirect" in fetched:
                 dest=normalize_url(fetched["redirect"])
-                notes.append(f"Redirect {fetched['status']}: {url} → {dest}")
-                if dest and same_origin(dest,start) and dest not in seen: todo.insert(0,dest)
+                notes.append(f"Redirect {fetched['status']}: {url} → {dest or 'invalid destination'}")
+                # Redirect destinations are normalized and checked against the original origin before queuing.
+                if dest and same_origin(dest,root) and dest not in seen: todo.insert(0,dest)
                 continue
             if fetched.get("non_html"):
                 notes.append(f"Skipped non-HTML URL (HTTP {fetched['status']}): {url}")
                 continue
             page=parse_page(url,fetched["html"],fetched["status"],fetched.get("headers"))
             pages.append(page)
+            if not sitemap_discovered:
+                sitemap_discovered=True
+                sitemap_urls, sitemap_notes=discover_sitemap_urls(root)
+                sitemap_count=len(sitemap_urls)
+                notes.extend(sitemap_notes)
+                # Sitemap URLs are discovered by the site itself; still require same origin and robots permission.
+                for candidate in reversed(sitemap_urls):
+                    if candidate not in seen and candidate not in todo and same_origin(candidate,root):
+                        todo.insert(0,candidate)
             for link in page["links"]:
                 target=link["url"]
                 in_scope = (not scope_prefix) or (urlparse(target).path == scope_prefix or urlparse(target).path.startswith(scope_prefix.rstrip("/") + "/"))
-                if same_origin(target,start) and in_scope and target not in seen and len(seen)+len(todo)<max_pages*5:
-                    if urlparse(target).path.lower().endswith((".pdf",".jpg",".jpeg",".png",".gif",".svg",".webp",".zip",".xml",".json")): continue
+                if same_origin(target,root) and in_scope and target not in seen and target not in todo and len(seen)+len(todo)<max_pages*5:
+                    if urlparse(target).path.lower().endswith((".pdf",".jpg",".jpeg",".png",".gif",".svg",".webp",".zip",".xml",".json",".css",".js",".woff",".woff2")): continue
                     todo.append(target)
             time.sleep(max(0.5,min(float(delay),10)))
         except Exception as e:
-            pages.append({"url":url,"status":0,"title":"","title_len":0,"description":"","description_len":0,"h1":[],"h1_count":0,"canonical":"","robots":"","noindex":False,"images":0,"alt_missing":0,"alt_empty":0,"words":0,"internal_links":0,"external_links":0,"jsonld_blocks":0,"jsonld_types":"","links":[],"headers":{},"text_excerpt":"","error":str(e)})
+            pages.append({"url":url,"status":0,"title":"","title_len":0,"description":"","description_len":0,"h1":[],"h1_count":0,"canonical":"","robots":"","noindex":False,"images":0,"alt_missing":0,"alt_empty":0,"words":0,"internal_links":0,"external_links":0,"jsonld_blocks":0,"jsonld_types":"","links":[],"headers":{},"text_excerpt":"","error":str(e)[:240]})
+    if sitemap_count:
+        notes.append(f"Discovered {sitemap_count} same-origin page URL(s) through sitemap files.")
+    if len(pages) >= max_pages and todo:
+        notes.append(f"The automatic safety limit of {max_pages} HTML pages was reached. This report covers the pages inspected; a deeper crawl would be needed to assess the rest of the site.")
     findings=make_findings(pages)
-    # Transparent heuristic: starts at 100 and deducts capped penalties by priority/category.
     score=max(0,100-sum({"P1":12,"P2":5,"P3":2}.get(f["priority"],1) for f in findings)//max(1,len(pages)//3 or 1))
-    return {"url":start,"pages":pages,"findings":findings,"score":score,"notes":notes,"created_at":now()}
+    return {"url":root,"pages":pages,"findings":findings,"score":score,"notes":notes,"created_at":now(),
+            "coverage":{"pages_inspected":len(pages),"page_limit":max_pages,"limit_reached":len(pages)>=max_pages and bool(todo),"sitemap_urls_discovered":sitemap_count}}
 
 # ---------- AI integration ----------
 def openai_call(system_prompt, user_prompt, model=None):
@@ -609,11 +669,85 @@ def fetch_public_text(url, limit=500_000):
     except Exception as exc:
         return {"ok":False,"status":None,"text":"","error":str(exc)[:180],"url":url}
 
+def _sitemap_locations(xml_text):
+    """Parse <loc> values from a sitemap or sitemap index without external entities."""
+    if not xml_text or len(xml_text) > 500_000:
+        return [], False
+    try:
+        root = ET.fromstring(xml_text)
+        locations = []
+        for element in root.iter():
+            if element.tag.rsplit("}", 1)[-1].lower() == "loc" and element.text:
+                locations.append(element.text.strip())
+        kind = root.tag.rsplit("}", 1)[-1].lower()
+        return locations, kind in ("urlset", "sitemapindex")
+    except (ET.ParseError, ValueError):
+        return [], False
+
+def discover_sitemap_urls(start_url):
+    """Discover same-origin sitemap URLs from robots.txt and common paths, bounded to 10 maps/500 URLs."""
+    start=normalize_url(start_url); p=urlparse(start); origin=f"{p.scheme}://{p.netloc}"
+    notes=[]; candidates=[]
+    robots=fetch_public_text(urljoin(origin,"/robots.txt"),200_000)
+    if robots["ok"]:
+        for line in robots["text"].splitlines():
+            if line.strip().lower().startswith("sitemap:"):
+                candidate=normalize_url(line.split(":",1)[1].strip())
+                if candidate and same_origin(candidate,origin) and candidate not in candidates:
+                    candidates.append(candidate)
+    for path in ("/sitemap.xml","/sitemap_index.xml","/sitemap-index.xml"):
+        candidate=urljoin(origin,path)
+        if candidate not in candidates:
+            candidates.append(candidate)
+    queue=candidates[:MAX_SITEMAPS]; seen_maps=set(); page_urls=[]
+    while queue and len(seen_maps)<MAX_SITEMAPS and len(page_urls)<MAX_SITEMAP_URLS:
+        sitemap_url=queue.pop(0)
+        if sitemap_url in seen_maps or not same_origin(sitemap_url,origin):
+            continue
+        seen_maps.add(sitemap_url)
+        result=fetch_public_text(sitemap_url,500_000)
+        if not result["ok"]:
+            continue
+        locations,valid_xml=_sitemap_locations(result["text"])
+        if not valid_xml:
+            continue
+        for location in locations:
+            target=normalize_url(urljoin(sitemap_url,location))
+            if not target or not same_origin(target,origin):
+                continue
+            if urlparse(target).path.lower().endswith((".pdf",".jpg",".jpeg",".png",".gif",".svg",".webp",".zip",".xml",".json",".css",".js",".woff",".woff2")):
+                if urlparse(target).path.lower().endswith(".xml") and target not in seen_maps and len(queue)+len(seen_maps)<MAX_SITEMAPS:
+                    queue.append(target)
+                continue
+            if target not in page_urls:
+                page_urls.append(target)
+                if len(page_urls)>=MAX_SITEMAP_URLS:
+                    break
+    if page_urls:
+        notes.append(f"Sitemap discovery found {len(page_urls)} same-origin URL(s); sitemap entries are treated as discovery hints, not proof that every URL is indexable.")
+    return page_urls[:MAX_SITEMAP_URLS],notes
+
 def analyze_ai_search_health(start_url, pages):
     """Free technical AI-search readiness checks; does not pretend to query model answers."""
     start=normalize_url(start_url); parsed=urlparse(start); origin=f"{parsed.scheme}://{parsed.netloc}"
     robots=fetch_public_text(urljoin(origin,"/robots.txt"),200_000)
-    sitemap=fetch_public_text(urljoin(origin,"/sitemap.xml"),500_000)
+    sitemap_candidates=[]
+    if robots["ok"]:
+        for line in robots["text"].splitlines():
+            if line.strip().lower().startswith("sitemap:"):
+                candidate=normalize_url(line.split(":",1)[1].strip())
+                if candidate and same_origin(candidate,origin) and candidate not in sitemap_candidates:
+                    sitemap_candidates.append(candidate)
+    for path in ("/sitemap.xml","/sitemap_index.xml","/sitemap-index.xml"):
+        candidate=urljoin(origin,path)
+        if candidate not in sitemap_candidates: sitemap_candidates.append(candidate)
+    sitemap_url=""
+    sitemap={"ok":False,"status":None,"text":"","error":"No sitemap location was verified.","url":""}
+    for candidate in sitemap_candidates[:MAX_SITEMAPS]:
+        attempt=fetch_public_text(candidate,500_000)
+        locations,valid_sitemap=_sitemap_locations(attempt.get("text","")) if attempt.get("ok") else ([],False)
+        if attempt.get("ok") and valid_sitemap:
+            sitemap=attempt; sitemap_url=candidate; break
     llms=fetch_public_text(urljoin(origin,"/llms.txt"),200_000)
     findings=[]; platform_rows=[]
     def add(priority,category,issue,evidence,fix,seo_benefit,aeo_benefit,gain,confidence="Medium"):
@@ -654,7 +788,7 @@ def analyze_ai_search_health(start_url, pages):
     if sitemap["ok"]:
         sitemap_signal=bool(re.search(r"<urlset|<sitemapindex",sitemap["text"],re.I))
         if sitemap_signal:
-            add("P3","Discovery","XML sitemap detected",f"{urljoin(origin,'/sitemap.xml')} returned HTTP {sitemap['status']} and contains a sitemap root element.",
+            add("P3","Discovery","XML sitemap detected",f"{sitemap_url} returned HTTP {sitemap['status']} and contains a sitemap root element.",
                 "Keep the sitemap current, canonical, and limited to indexable URLs; submit it in search consoles where appropriate.",
                 "Can help search engines discover canonical URLs.","A clearer URL inventory may help discovery systems locate useful pages.","Improves discovery signals; inclusion is not guaranteed.","High")
         else:
@@ -747,8 +881,13 @@ def load_diagnostic(run_id, project_id):
     ai_payload=json.loads(r["ai_findings_json"])
     if isinstance(ai_payload,list):
         ai_payload={"score":r["ai_score"],"findings":ai_payload,"platforms":[],"signals":{},"disclaimer":"AI Search Health is technical readiness, not observed model visibility."}
+    saved_pages=json.loads(r["pages_json"])
+    saved_notes=json.loads(r["crawl_notes_json"])
+    coverage={"pages_inspected":len(saved_pages),"page_limit":MAX_CRAWL_PAGES,
+              "limit_reached":any("automatic safety limit" in str(note).lower() for note in saved_notes),
+              "sitemap_urls_discovered":0}
     return {"id":r["id"],"created_at":r["created_at"],"scope_mode":r["scope_mode"],"scope_url":r["scope_url"],
-            "seo":{"score":r["seo_score"],"pages":json.loads(r["pages_json"]),"findings":json.loads(r["seo_findings_json"]),"notes":json.loads(r["crawl_notes_json"])},
+            "seo":{"score":r["seo_score"],"pages":saved_pages,"findings":json.loads(r["seo_findings_json"]),"notes":saved_notes,"coverage":coverage},
             "ai": ai_payload}
 
 # ---------- Main UI: one guided workflow ----------
@@ -762,7 +901,7 @@ with st.sidebar:
     st.caption("SEARCH + AI DISCOVERY DIAGNOSTICS")
     st.markdown("---")
     st.markdown("**Your workflow**")
-    st.markdown("<div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>01 · Enter a URL</div><div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>02 · Adjust scope</div><div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>03 · Review both health reports</div>",unsafe_allow_html=True)
+    st.markdown("<div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>01 · Enter a website URL</div><div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>02 · Automatic diagnostics</div><div class='ogs-step' style='background:#234b3c;border-color:#456b59;color:#f1f5e9'>03 · Review both health reports</div>",unsafe_allow_html=True)
     st.markdown("---")
     st.caption(user["email"])
     if st.button("Sign out",use_container_width=True):
@@ -804,13 +943,11 @@ if st.session_state.get("active_report"):
 if active_report:
     report=active_report
 else:
-    st.markdown('<div class="ogs-heading">Start your website diagnostic</div><div class="ogs-sub">Three steps. No SEO expertise required. You can change the scope before the scan begins.</div>',unsafe_allow_html=True)
+    st.markdown('<div class="ogs-heading">Start your website diagnostic</div><div class="ogs-sub">Enter one website URL. We discover accessible pages automatically and handle the technical setup for you.</div>',unsafe_allow_html=True)
     with st.form("guided_diagnostic_form",clear_on_submit=False):
-        url_input=st.text_input("1 · Enter your website URL",placeholder="https://yourcompany.com",help="Use a website you own or are authorized to audit.")
-        scope_mode=st.radio("2 · Adjust crawl scope",["Entire entered hostname","Specific folder"],horizontal=True,help="The entered hostname may be a root domain or subdomain. The crawl stays on that hostname; choose a folder to limit the scan to that path.")
-        max_pages=st.select_slider("Maximum pages to inspect",options=[10,25,50,100],value=25,help="More pages take longer. This is a bounded HTML crawl, not a browser-rendered crawl.")
-        run_scan=st.form_submit_button("Run SEO + AI Search diagnostics →",type="primary",use_container_width=True)
-    st.markdown('<div class="ogs-trustline" style="justify-content:flex-start;margin:10px 0 20px"><span>SEO runs first</span><span>AI readiness runs second</span><span>Evidence-backed fixes</span><span>No fabricated AI visibility scores</span></div>',unsafe_allow_html=True)
+        url_input=st.text_input("Website URL",placeholder="yourcompany.com",help="Enter a domain or website URL. We will discover accessible pages automatically. Only scan websites you own or are authorized to assess.")
+        run_scan=st.form_submit_button("Run website diagnostic →",type="primary",use_container_width=True)
+    st.markdown("<div class='ogs-trustline' style='justify-content:flex-start;margin:10px 0 20px'><span>Site Health runs first</span><span>AI Search Health runs second</span><span>Evidence-backed fixes</span><span>No fabricated AI visibility scores</span></div>",unsafe_allow_html=True)
     if run_scan:
         normalized=normalize_url(url_input)
         valid,msg=validate_public_url(normalized) if normalized else (False,"Enter a full public website URL.")
@@ -818,10 +955,11 @@ else:
             st.error(msg)
         else:
             parsed=urlparse(normalized); root=f"{parsed.scheme}://{parsed.netloc}"
-            if scope_mode=="Entire entered hostname":
-                crawl_start=root; scope_prefix=None
-            else:
-                crawl_start=normalized; scope_prefix=(parsed.path.rstrip("/") or None) if parsed.path!="/" else None
+            # The user provides only a URL. Automatically normalize the scan to the entered hostname;
+            # keep the page cap internal as a safety/performance guardrail, not a user-facing setting.
+            scope_mode="Automatic hostname scan"
+            crawl_start=root; scope_prefix=None
+            max_pages=MAX_CRAWL_PAGES
             existing=query("SELECT * FROM projects WHERE user_id=? AND domain=?",(uid,root))
             if existing:
                 proj=existing[0]; project_id=proj["id"]
@@ -830,12 +968,15 @@ else:
             with st.status("Preparing your diagnostic…",expanded=True) as status:
                 try:
                     st.write("**Step 1 of 2 — Site Health (SEO)**")
-                    st.write("Crawling permitted public HTML pages and collecting technical evidence…")
+                    st.write("Discovering accessible pages from the homepage, internal links and sitemap files…")
+                    st.write("Collecting technical SEO evidence within automatic safety limits…")
                     seo=crawl_site(crawl_start,max_pages=max_pages,delay=0.5,scope_prefix=scope_prefix)
                     seo["score"]=score_seo(seo["pages"],seo["findings"])
                     if not seo["pages"]:
                         raise RuntimeError("No HTML pages were successfully audited. Check the URL, robots.txt and hosting response, then try again.")
-                    st.write(f"SEO scan complete: {len(seo['pages'])} pages inspected, {len(seo['findings'])} findings.")
+                    st.write(f"Site Health complete: {len(seo['pages'])} pages inspected, {len(seo['findings'])} findings.")
+                    if seo.get("coverage",{}).get("limit_reached"):
+                        st.warning("This website is larger than the automatic scan limit. The report will identify the scan as partial; no page-limit choice is required to get started.")
                     st.write("**Step 2 of 2 — AI Search Health**")
                     st.write("Checking robots directives, sitemap, llms.txt and content signals used for machine discovery…")
                     ai=analyze_ai_search_health(crawl_start,seo["pages"])
@@ -851,7 +992,13 @@ else:
 
 if report:
     seo=report["seo"]; ai=report["ai"]
-    st.markdown(f'<div class="ogs-hero" style="background:linear-gradient(120deg,#fff 0%,#f1f8ed 100%);border-color:#dbe8d8"><div class="ogs-eyebrow" style="color:#315d47">DIAGNOSTIC REPORT · {html.escape(report["created_at"][:10])}</div><h2 style="margin:5px 0">{html.escape(report["scope_url"])}</h2><p>Scope: {html.escape(report["scope_mode"])} · {len(seo["pages"])} HTML pages inspected · SEO first, AI Search Health second</p></div>',unsafe_allow_html=True)
+    st.markdown(f'<div class="ogs-hero" style="background:linear-gradient(120deg,#fff 0%,#f1f8ed 100%);border-color:#dbe8d8"><div class="ogs-eyebrow" style="color:#315d47">DIAGNOSTIC REPORT · {html.escape(report["created_at"][:10])}</div><h2 style="margin:5px 0">{html.escape(report["scope_url"])}</h2><p>Automatic website scan · {len(seo["pages"])} HTML pages inspected · Site Health first, AI Search Health second</p></div>',unsafe_allow_html=True)
+    coverage=seo.get("coverage",{})
+    if coverage.get("limit_reached"):
+        st.warning(f"Partial scan: {coverage.get('pages_inspected',len(seo['pages']))} pages inspected before the automatic safety limit. Review this report as a sample of the site, not a complete audit.")
+    elif seo.get("notes"):
+        with st.expander("Scan coverage and notes"):
+            for note in seo.get("notes",[]): st.write(f"• {note}")
     m1,m2,m3,m4=st.columns(4)
     m1.metric("Site Health · SEO",f"{seo['score']}/100",help="Internal technical SEO heuristic, not a Google score.")
     m2.metric("AI Search Health",f"{ai['score']}/100",help="Technical readiness heuristic, not a ranking or observed-mention score.")

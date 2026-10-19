@@ -1,8 +1,8 @@
 # Organic Growth Studio — Guided Diagnostics Build
 
-A Streamlit prototype built around one primary workflow:
+A Streamlit diagnostic prototype built around one primary workflow (V4.2):
 
-**Enter URL → adjust crawl scope → run diagnostics → review Site Health (SEO) → review AI Search Health → follow an evidence-backed fix plan.**
+**Enter one URL → automatic page discovery → Site Health (SEO) → AI Search Health → follow an evidence-backed fix plan.**
 
 The interface is intentionally simplified. It no longer asks users to navigate a collection of separate SEO tools before they can understand their website.
 
@@ -22,18 +22,18 @@ python -m pytest -q
 streamlit run app.py
 ```
 
-Create an account from the sign-in screen. After sign-in, enter a public website URL, choose the hostname or folder scope, and run the guided diagnostic.
+Create an account from the sign-in screen. After sign-in, enter one public website URL and run the diagnostic. The app accepts a domain with or without `https://`, normalizes to the hostname root, discovers pages from homepage links and same-origin sitemap files, and keeps the page limit internal as a safety guardrail.
 
 ## What this build actually checks
 
 ### 1. Site Health — SEO
-- Bounded same-origin HTML crawl with a page limit, crawl delay and robots.txt check.
+- Automatic bounded same-origin HTML crawl seeded by homepage links and same-origin sitemap URLs found in robots.txt or common sitemap paths. The internal cap is 50 HTML pages; users do not configure it. robots.txt is parsed once per crawl for page-level decisions.
 - HTTP status, title, meta description, H1 structure, canonical, noindex, image alt attributes, visible text length, JSON-LD presence and internal/external links.
 - Findings show observed evidence and suggested actions.
 - SEO score is a transparent internal heuristic—not a Google score or ranking forecast.
 
 ### 2. AI Search Health — technical readiness
-- Checks the standard `/robots.txt`, `/sitemap.xml` and `/llms.txt` locations.
+- Checks `/robots.txt`, sitemap locations declared in robots.txt, common sitemap paths, and `/llms.txt`. Sitemap indexes are followed within bounded limits.
 - Parses robots directives for ten AI/search ecosystems: OpenAI/ChatGPT Search, Anthropic/Claude, Perplexity, Google AI Overviews/Gemini, Microsoft Copilot/Bing, Meta AI, Apple, Amazon, You.com and Brave.
 - Reviews crawled page signals such as structured data, headings, visible content and internal links.
 - Provides fixes with separate potential SEO and AEO/AI-search benefits.
@@ -54,6 +54,12 @@ Create an account from the sign-in screen. After sign-in, enter a public website
 2. Configure the deployed app to use `app.py` as the entry point.
 3. Commit and push the intended release; Streamlit rebuilds the app from the connected repository.
 4. Run the workflow on a staging deployment before replacing the current production app.
+
+## V4.2 implementation notes
+
+- The report stores whether the internal crawl limit was reached, so reopening a saved report preserves its partial-coverage warning.
+- Sitemap discovery is bounded to 10 sitemap files and 500 candidate URLs before the 50-page crawl ceiling is applied. Sitemap entries are discovery hints, not proof of indexability.
+- A bare domain such as `example.com` is accepted and defaults to HTTPS.
 
 ## Limitations before commercial launch
 
